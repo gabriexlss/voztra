@@ -20,7 +20,7 @@
 
 ## Próximos passos deste checkpoint
 
-Validar o pacote final com código mais recente; executar transcrição real, portable e teste do atualizador; revisar capturas; publicar fonte e releases e registrar resultados finais abaixo. Este arquivo permite continuar uma sessão interrompida sem confundir implementação com validação concluída.
+Concluir a publicação do rascunho 1.3.0 após reunir Windows e Linux, conferir os hashes remotos e registrar a publicação. Este arquivo permite continuar uma sessão interrompida sem confundir implementação com validação concluída.
 
 ## Progresso confirmado
 
@@ -28,5 +28,11 @@ Validar o pacote final com código mais recente; executar transcrição real, po
 - Transcrição real em CPU passou nos testes da interface final: lote, exportação, renomeação, benchmark, progresso intermediário e cancelamento.
 - Pacote atual em `dist/work/1.3.0/win-unpacked` passou na comparação de todos os arquivos de saída, metadados e benchmark por SHA-256. Main em bytecode; preload isolado.
 - Capturas revisadas e adicionadas em `docs/images`; nenhum áudio pessoal incluído.
-- Build Windows no GitHub iniciado: execução 35205028871. Não confundir execução iniciada com validação concluída.
-- Permanecem os testes específicos portable/atualizador e a publicação final 1.3 após o empacotamento terminar.
+- Workflow Windows e Linux concluído com sucesso: execução 35207490679, commit 2efc09c. Inclui lint, typecheck, testes Python, build, ASAR e interface empacotada nas duas plataformas.
+- Teste final de transcrição real no pacote Windows passou: lote, exportação, histórico, benchmark, progresso, cancelamento e descarregamento do modelo.
+- Teste portable passou com duas aberturas do executável em pasta com espaços e persistência das preferências.
+- Teste do atualizador passou com download real do instalador, integridade e bloqueio durante transcrição. A instalação final foi interceptada: não se executou uma atualização completa sobre uma instalação antiga do usuário.
+- Linux AppImage e deb baixados do workflow; todos os hashes comparados ao manifesto do artefato. Pacotes reunidos em `dist/releases/1.3.0`, com manifesto SHA256SUMS combinado.
+- Artefatos Windows usam ASAR e bytecode V8 no main. Portable e Linux oferecem atualização manual; a instalação Windows usa electron-updater.
+- Arquivamento das versões antigas economizou aproximadamente 761 MiB, com verificação de cada arquivo antes da remoção dos originais soltos.
+- Em 17/09/2026, o terminal voltou a funcionar após falha do ambiente Codex. A release 1.3.0 permanece em rascunho até completar o upload Linux e a conferência remota; as releases legadas já estão públicas.

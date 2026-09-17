@@ -4,7 +4,7 @@
 
 O postinstall executa `install-electron` explicitamente: a versão 44 do pacote Electron não tem postinstall próprio. O binário precisa existir antes de o electron-vite gerar bytecode. As entradas `@emnapi/core`, `@emnapi/runtime` e `@emnapi/wasi-threads` nas dependências de desenvolvimento estabilizam a resolução das dependências opcionais WASM no npm 10/11.
 
-`npm ci`, `npm run setup:python`, `npm run build:win` produzem NSIS e portable x64 em `dist/releases/<versão>`. Python entra em `resources/core`; modelos não entram no pacote. Execute o build Windows no Windows. Linux usa `npm run build:linux` em Linux e ainda precisa de validação na plataforma.
+`npm ci`, `npm run setup:python`, `npm run build:win` produzem NSIS e portable x64 em `dist/releases/<versão>`. Python entra em `resources/core`; modelos não entram no pacote. Execute o build Windows no Windows. Linux usa `npm run build:linux` em Linux; o workflow gera AppImage e deb em Ubuntu 22.04 e verifica a interface empacotada e o motor sob Xvfb.
 
 `node scripts/verify-build.mjs dist/work/1.3.0/win-unpacked` compara a saída atual com o ASAR e exige bytecode V8 no main. O preload continua JavaScript com sandbox e isolamento de contexto. Bytecode depende da versão de V8/Electron e da arquitetura: sempre gere junto com a distribuição. ASAR e bytecode não são criptografia nem protegem segredos.
 
@@ -19,6 +19,10 @@ O launcher portable define `PORTABLE_EXECUTABLE_DIR`; os dados ficam em `data` n
 `TRANSCREVEDOR_DATA_DIR` permite isolar testes e desativa consultas automáticas de atualização. Não use sua pasta real de dados em testes. `VOZTRA_DISABLE_GPU=1` é uma alternativa para falhas de driver gráfico do Chromium; não muda o dispositivo de inferência Whisper.
 
 ## Testes
+
+Os testes opcionais `TEST_PORTABLE=<caminho>` e `TEST_UPDATER=1` verificam a execução portable real em pasta com espaços, persistência após reabrir, download de instalador real com verificação de integridade e proteção contra atualização durante transcrição. O teste do atualizador usa um servidor local e uma versão corrente simulada; a chamada final de instalação é interceptada para não substituir uma instalação do usuário. Isso não equivale a testar a execução completa do instalador sobre todas as versões antigas.
+
+`E2E_HIDDEN=1` executa o teste funcional sem mostrar a janela; capturas são desativadas nesse modo porque o Chromium não captura janelas ocultas. A revisão visual usa as capturas da execução normal. Os arquivos de diagnóstico locais não são enviados automaticamente ao repositório público.
 
 Execute `npm run lint`, `npm test`, `npm run build`, `npm run test:e2e`. Para testar a distribuição, defina `TRANSCREVEDOR_EXECUTABLE` com o caminho absoluto de `win-unpacked/voztra.exe`. No Windows, `scripts/create-fixture.ps1` cria fala sintética para `REAL_TRANSCRIPTION=1`, que verifica fila, exportação, progresso intermediário, cancelamento e benchmark. `TEST_DOWNLOAD=1` habilita download real isolado (~75 MB).
 

@@ -75,6 +75,15 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
     const failures: string[] = []
     page.on('pageerror', (error) => failures.push(error.message))
     await expect(page.getByText('Motor conectado', { exact: true })).toBeVisible({ timeout: 60000 })
+    if (process.env.E2E_HIDDEN === '1') {
+      await app.evaluate(({ BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        window.webContents.setBackgroundThrottling(false)
+        window.hide()
+      })
+      // O Chromium não captura janelas ocultas. As capturas visuais usam a execução normal.
+      page.screenshot = async () => Buffer.alloc(0)
+    }
     await expect(page.getByRole('combobox', { name: 'Modelo Whisper' })).toHaveText('Base')
     await expect(page.getByRole('combobox', { name: 'Compute type' })).toHaveText('Automático')
     await expect(page.getByText('Aguardando amostra', { exact: true })).toHaveCount(0, {
@@ -290,10 +299,17 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
           timeout: 60000
         })
         .toBeGreaterThan(0)
+        .catch(async (error) => {
+          await page
+            .screenshot({ path: '.cache/progress-failure.png', timeout: 5000 })
+            .catch(() => {})
+          throw error
+        })
       expect(Number(await audioProgress.getAttribute('aria-valuenow'))).toBeLessThan(100)
-      await page
-        .locator('.transcription-progress')
-        .screenshot({ path: '.cache/progress-active.png' })
+      if (process.env.E2E_HIDDEN !== '1')
+        await page
+          .locator('.transcription-progress')
+          .screenshot({ path: '.cache/progress-active.png' })
       await page.getByRole('button', { name: 'Cancelar', exact: true }).click()
       await expect(page.getByRole('button', { name: 'Cancelar', exact: true })).toHaveCount(0, {
         timeout: 15000

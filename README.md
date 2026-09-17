@@ -10,16 +10,18 @@ Transcrição local com modelos Whisper, controle manual da memória e históric
 
 ## Instalação
 
-| Distribuição Windows x64 | Uso |
-| --- | --- |
-| `Voztra-1.3.0-win-x64-setup.exe` | Instala o aplicativo, cria atalhos e permite baixar atualizações pelo próprio Voztra. |
+| Distribuição Windows x64            | Uso                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Voztra-1.3.0-win-x64-setup.exe`    | Instala o aplicativo, cria atalhos e permite baixar atualizações pelo próprio Voztra.               |
 | `Voztra-1.3.0-win-x64-portable.exe` | Um executável sem instalação. Salva histórico, modelos e preferências na pasta `data` ao lado dele. |
 
 Python e as bibliotecas de áudio já estão incluídos. Modelos são baixados separadamente pela aba **Modelos**. Para atualizar o portable, feche o app e substitua o executável, mantendo a pasta `data`. O runtime portable é extraído temporariamente na inicialização.
 
 Se você usa Transcrevedor 1.0–1.2, instale a versão 1.3 manualmente uma vez. O Voztra instalado mantém os dados em `%APPDATA%/transcrevedor`; seus modelos e histórico continuam disponíveis. A edição portable tem dados independentes.
 
-As builds atuais não possuem certificado comercial de assinatura. Confira `SHA256SUMS.txt` na release. Linux tem configuração de build, mas ainda não foi validado nem é oferecido como binário oficial.
+As builds atuais não possuem certificado comercial de assinatura. Confira `SHA256SUMS.txt` na release.
+
+**Linux x64:** a release também oferece AppImage e `.deb`, gerados e testados em Ubuntu 22.04 no GitHub Actions. No AppImage, conceda permissão de execução (`chmod +x Voztra-1.3.0-linux-x86_64.AppImage`) e abra o arquivo. O pacote `Voztra-1.3.0-linux-amd64.deb` pode ser instalado pelo gerenciador de pacotes. A pasta de dados continua `~/.config/transcrevedor`. Atualizações Linux são baixadas manualmente pela página de releases; outros ambientes gráficos e distribuições não foram validados.
 
 ## Recursos
 
@@ -91,7 +93,7 @@ O processador é identificado pelo registro do Windows ou `/proc/cpuinfo` no Lin
 - **CPU:** Windows e Linux, com tipos numéricos consultados no CTranslate2.
 - **GPU:** NVIDIA/CUDA. Requer driver e bibliotecas CUDA/cuDNN compatíveis com a versão de CTranslate2 instalada. O app só oferece capacidades detectadas; uma GPU listada ainda pode falhar ao carregar se faltar uma DLL de execução.
 - **AMD/Intel:** use CPU nesta versão. Outro backend será necessário para aceleração dessas placas.
-- **Linux:** caminhos e alvo AppImage/deb preparados. O pacote deve ser construído no próprio Linux; testes locais nesta entrega são feitos no Windows.
+- **Linux:** AppImage/deb construídos em Ubuntu 22.04, com testes da interface empacotada e conexão ao motor Python no GitHub Actions. Transcrição real e testes portable/atualizador foram executados no Windows.
 
 O instalador inclui Python e as dependências do core, mas não os modelos nem o driver NVIDIA. Bibliotecas CUDA do sistema devem estar acessíveis no PATH (Windows) ou no carregador de bibliotecas (Linux).
 
