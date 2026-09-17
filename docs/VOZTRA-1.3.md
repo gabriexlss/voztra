@@ -20,7 +20,7 @@
 
 ## Próximos passos deste checkpoint
 
-Concluir a publicação do rascunho 1.3.0 após reunir Windows e Linux, conferir os hashes remotos e registrar a publicação. Este arquivo permite continuar uma sessão interrompida sem confundir implementação com validação concluída.
+Publicação concluída: https://github.com/gabriexlss/voztra/releases/tag/v1.3.0. A tag aponta para o commit bdaff15. Não há etapas pendentes para distribuir esta versão; o workflow de tags pode repetir os builds e preserva os arquivos já publicados.
 
 ## Progresso confirmado
 
@@ -35,4 +35,5 @@ Concluir a publicação do rascunho 1.3.0 após reunir Windows e Linux, conferir
 - Linux AppImage e deb baixados do workflow; todos os hashes comparados ao manifesto do artefato. Pacotes reunidos em `dist/releases/1.3.0`, com manifesto SHA256SUMS combinado.
 - Artefatos Windows usam ASAR e bytecode V8 no main. Portable e Linux oferecem atualização manual; a instalação Windows usa electron-updater.
 - Arquivamento das versões antigas economizou aproximadamente 761 MiB, com verificação de cada arquivo antes da remoção dos originais soltos.
-- Em 17/09/2026, o terminal voltou a funcionar após falha do ambiente Codex. A release 1.3.0 permanece em rascunho até completar o upload Linux e a conferência remota; as releases legadas já estão públicas.
+- Em 17/09/2026, o terminal voltou a funcionar após falha do ambiente Codex. A release 1.3.0 foi publicada como versão estável mais recente, com Windows setup/portable, Linux AppImage/deb, metadados e manifesto de integridade. Os oito arquivos remotos tiveram seus hashes comparados aos arquivos locais.
+- Os SHA-512 dos instaladores também conferem com `latest.yml` e `latest-linux.yml`. A build Windows consultou o canal público real após a publicação e retornou `status: current`, versão 1.3.0, usando perfil isolado, sem baixar ou instalar atualizações.
