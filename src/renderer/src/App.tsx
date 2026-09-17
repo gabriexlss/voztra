@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import {
   AudioLines,
   Library,
@@ -14,7 +14,7 @@ import {
   Moon,
   NotebookText
 } from 'lucide-react'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import { useTranscriber } from './hooks/useTranscriber'
 import { ModelControl } from './components/ModelControl'
 import { ModelLibrary } from './components/ModelLibrary'
@@ -78,6 +78,23 @@ const operationLabels: Record<string, string> = {
 export default function App(): JSX.Element {
   const c = useTranscriber()
   const [page, setPage] = useState('transcription')
+  useEffect(
+    () =>
+      window.api.onUpdate((update) => {
+        if (update.status === 'available' || update.status === 'downloaded') {
+          toast(
+            update.status === 'available'
+              ? `Voztra ${update.availableVersion} disponível`
+              : 'Atualização pronta para instalar',
+            {
+              id: 'app-update',
+              action: { label: 'Ver', onClick: () => setPage('settings') }
+            }
+          )
+        }
+      }),
+    []
+  )
   const [resources, setResources] = useState(false)
   const [theme, setTheme] = useState<Theme>(readTheme)
   const current = pages.find((p) => p.id === page)!
