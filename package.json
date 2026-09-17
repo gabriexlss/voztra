@@ -13,7 +13,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "install-electron && electron-builder install-app-deps",
     "build:unpack": "npm run build && npm run build:core && electron-builder --dir",
     "build:win": "npm run build && npm run build:core && electron-builder --win --publish never && node scripts/finalize-build.mjs",
     "build:linux": "npm run build && npm run build:core && electron-builder --linux --publish never && node scripts/finalize-build.mjs",

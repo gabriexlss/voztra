@@ -2,6 +2,8 @@
 
 ## Build local
 
+O postinstall executa `install-electron` explicitamente: a versão 44 do pacote Electron não tem postinstall próprio. O binário precisa existir antes de o electron-vite gerar bytecode. As entradas `@emnapi/core`, `@emnapi/runtime` e `@emnapi/wasi-threads` nas dependências de desenvolvimento estabilizam a resolução das dependências opcionais WASM no npm 10/11.
+
 `npm ci`, `npm run setup:python`, `npm run build:win` produzem NSIS e portable x64 em `dist/releases/<versão>`. Python entra em `resources/core`; modelos não entram no pacote. Execute o build Windows no Windows. Linux usa `npm run build:linux` em Linux e ainda precisa de validação na plataforma.
 
 `node scripts/verify-build.mjs dist/work/1.3.0/win-unpacked` compara a saída atual com o ASAR e exige bytecode V8 no main. O preload continua JavaScript com sandbox e isolamento de contexto. Bytecode depende da versão de V8/Electron e da arquitetura: sempre gere junto com a distribuição. ASAR e bytecode não são criptografia nem protegem segredos.
