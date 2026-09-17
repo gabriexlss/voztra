@@ -1,0 +1,29 @@
+appId: com.transcrevedor.desktop
+productName: Transcrevedor
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: release/core/transcrevedor-core
+    to: core
+win:
+  executableName: transcrevedor
+  target: nsis
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: Transcrevedor
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+linux:
+  target:
+    - AppImage
+    - deb
+  maintainer: Transcrevedor
+  category: AudioVideo
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false

@@ -1,0 +1,322 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@custom-variant dark (&:is(.dark *));
+
+/* Tokens semânticos: componentes e portais compartilham contraste, bordas e estados. */
+:root {
+  --background: #f7f8fa;
+  --foreground: #20252b;
+  --card: #ffffff;
+  --card-foreground: #20252b;
+  --popover: #ffffff;
+  --popover-foreground: #20252b;
+  --primary: #256f61;
+  --primary-foreground: #ffffff;
+  --secondary: #edf2f0;
+  --secondary-foreground: #245e52;
+  --muted: #f0f2f4;
+  --muted-foreground: #646d78;
+  --accent: #eaf2ef;
+  --accent-foreground: #205e51;
+  --destructive: #bd3d43;
+  --border: #dfe3e7;
+  --input: #d5dbe1;
+  --ring: #408f7f;
+  --radius: 0.625rem;
+  --other-usage: #a4b5c5;
+  --free-usage: #e7ebef;
+}
+.dark {
+  --background: #15181c;
+  --foreground: #e5e8eb;
+  --card: #1c2025;
+  --card-foreground: #e5e8eb;
+  --popover: #252a30;
+  --popover-foreground: #e5e8eb;
+  --primary: #88ceba;
+  --primary-foreground: #153c32;
+  --secondary: #2a3733;
+  --secondary-foreground: #b6dfd2;
+  --muted: #262b31;
+  --muted-foreground: #a1aab5;
+  --accent: #2c3834;
+  --accent-foreground: #c0e6d9;
+  --destructive: #f18b90;
+  --border: #333941;
+  --input: #414952;
+  --ring: #83bfae;
+  --other-usage: #64788e;
+  --free-usage: #30373f;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+  }
+  button,
+  summary {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  button,
+  a,
+  summary {
+    outline-offset: 4px;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+/* Estrutura desktop: navegação estável, área de leitura limitada e ritmo de 4/8 pixels. */
+@layer components {
+  .app-shell {
+    @apply grid grid-cols-[208px_minmax(0,1fr)] min-h-screen;
+  }
+  .sidebar {
+    @apply sticky top-0 h-screen border-r bg-card flex flex-col px-3;
+  }
+  .nav-item {
+    @apply w-full justify-start text-muted-foreground h-10 gap-3 font-normal;
+  }
+  .nav-active {
+    @apply bg-accent text-accent-foreground font-medium;
+  }
+  .app-header {
+    @apply h-16 border-b flex items-center justify-between px-7 bg-card;
+  }
+  .page-content {
+    @apply w-full max-w-[1440px] mx-auto px-7 py-7;
+  }
+  .panel {
+    @apply rounded-xl border bg-card p-5;
+  }
+  .help {
+    @apply text-xs text-muted-foreground leading-relaxed;
+  }
+  .dropzone {
+    @apply w-full border border-dashed rounded-lg flex flex-col items-center justify-center px-6 py-7 transition-colors hover:border-primary hover:bg-accent/30;
+  }
+  .section-heading {
+    @apply flex items-center justify-between gap-4 mb-4;
+  }
+  .section-heading h2 {
+    @apply font-semibold text-base;
+  }
+  .eyebrow {
+    @apply text-[10px] tracking-widest text-muted-foreground font-semibold mb-1;
+  }
+  .exports {
+    @apply flex gap-2;
+  }
+  .transcript-name {
+    @apply text-sm mb-4 break-words;
+  }
+  .transcript-name span {
+    @apply text-muted-foreground;
+  }
+  .empty {
+    @apply py-12 flex flex-col items-center justify-center gap-3 text-center text-muted-foreground;
+  }
+  .empty h3 {
+    @apply text-sm font-medium text-foreground;
+  }
+  .empty p {
+    @apply text-xs;
+  }
+  .segments {
+    @apply max-h-[600px] overflow-y-auto;
+  }
+  .segment {
+    @apply grid grid-cols-[44px_minmax(0,1fr)] gap-3 border-t py-4;
+  }
+  .segment > span {
+    @apply text-xs text-primary font-mono pt-2;
+  }
+  .segment textarea {
+    @apply min-h-20 leading-relaxed bg-transparent border-transparent shadow-none focus-visible:border-input;
+  }
+  .editor-note {
+    @apply block border-t pt-4 mt-2 text-xs text-muted-foreground;
+  }
+  .progress-heading {
+    @apply flex items-center justify-between gap-4;
+  }
+  .transcription-status {
+    @apply flex items-center gap-3 text-sm;
+  }
+  .transcription-status small {
+    @apply block mt-1 text-xs text-muted-foreground break-all;
+  }
+  .transcription-amount {
+    @apply flex items-end gap-4 my-5;
+  }
+  .transcription-percent {
+    @apply text-3xl font-semibold tracking-tight tabular-nums;
+  }
+  .transcription-amount > span {
+    @apply text-xs text-muted-foreground pb-1;
+  }
+  .transcription-stats {
+    @apply grid grid-cols-3 gap-6 my-5;
+  }
+  .transcription-stats span {
+    @apply block text-xs text-muted-foreground mb-1;
+  }
+  .transcription-stats strong {
+    @apply text-sm font-medium tabular-nums;
+  }
+  .progress-explanation {
+    @apply text-xs text-muted-foreground leading-relaxed;
+  }
+  .resources {
+    @apply grid grid-cols-3 gap-5;
+  }
+  .resource {
+    @apply p-0 border-0 rounded-none;
+  }
+  .resource > span {
+    @apply text-xs text-muted-foreground;
+  }
+  .resource > strong {
+    @apply block my-2 text-base font-medium tabular-nums;
+  }
+  .resource small {
+    @apply text-[10px] text-muted-foreground block mt-2;
+  }
+  .segmented-bar {
+    @apply flex h-2 w-full rounded-full overflow-hidden my-2;
+  }
+  .segmented-bar i {
+    transition: width 300ms ease;
+  }
+  .usage-app {
+    background: var(--primary);
+  }
+  .usage-other {
+    background: var(--other-usage);
+  }
+  .usage-free {
+    background: var(--free-usage);
+  }
+  .bar-legend {
+    @apply flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground;
+  }
+  .bar-legend span {
+    @apply flex items-center gap-1;
+  }
+  .bar-legend b {
+    @apply size-1.5 rounded-full;
+  }
+  details {
+    @apply border-t py-3;
+  }
+  summary {
+    @apply text-xs font-medium select-none;
+  }
+  .requirements {
+    @apply text-xs space-y-1 my-4;
+  }
+  .requirements dt {
+    @apply text-muted-foreground mt-3;
+  }
+  .requirements dd {
+    @apply font-medium leading-relaxed;
+  }
+  .comparison-table {
+    @apply w-full text-xs text-left;
+    min-width: 660px;
+  }
+  .comparison-table th,
+  .comparison-table td {
+    @apply p-4 align-top border-b border-r leading-relaxed;
+  }
+  .comparison-table thead {
+    @apply bg-muted text-sm;
+  }
+  .comparison-table tbody > tr > th {
+    @apply font-medium text-muted-foreground w-36;
+  }
+  .comparison-table td {
+    min-width: 210px;
+  }
+}
+/* Não simula porcentagens: a animação indeterminada só sinaliza atividade. */
+[data-slot='progress']:not([aria-valuenow]) [data-slot='progress-indicator'] {
+  width: 35%;
+  transform: none !important;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+@keyframes indeterminate {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 390% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (max-width: 1020px) {
+  .app-shell {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .page-content {
+    padding: 24px 20px;
+  }
+}
+
+@layer components {
+  .progress-heading {
+    @apply flex-wrap;
+  }
+  .transcription-status {
+    @apply min-w-0 flex-1;
+  }
+  .section-heading {
+    @apply flex-wrap;
+  }
+  .transcription-stats {
+    @apply gap-3;
+  }
+}
