@@ -5,7 +5,7 @@ import { join } from 'node:path'
 const directory = process.argv[2]
 if (!directory) throw new Error('Informe a pasta da release.')
 const files = readdirSync(directory)
-  .filter((name) => /\.(exe|blockmap|yml|AppImage|deb|zip)$/.test(name))
+  .filter((name) => /\.(exe|blockmap|AppImage|deb|zip)$/.test(name) || /^latest.*\.yml$/.test(name))
   .sort()
 const lines = []
 for (const name of files) {

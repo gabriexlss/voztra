@@ -41,11 +41,12 @@ test('atualizador baixa pacote real, preserva fila e só instala por ação expl
     const page = await app.firstWindow()
     await expect(page.getByText('Motor conectado', { exact: true })).toBeVisible({ timeout: 90000 })
     // Somente o teste altera a versão corrente e a origem; não há IPC de feed no produto.
-    await app.evaluate((_electron, feed) => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const engine = require('electron-updater').autoUpdater
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      engine.currentVersion = new (require('semver').SemVer)('1.2.99')
+    await app.evaluate(({ app }, feed) => {
+      const localRequire = process
+        .getBuiltinModule('module')
+        .createRequire(app.getAppPath() + '/package.json')
+      const engine = localRequire('electron-updater').autoUpdater
+      engine.currentVersion = new (localRequire('semver').SemVer)('1.2.99')
       engine.setFeedURL({ provider: 'generic', url: feed })
       engine.disableDifferentialDownload = true
       engine.quitAndInstall = (): void => {

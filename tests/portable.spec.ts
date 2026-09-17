@@ -1,4 +1,6 @@
-import { test, expect, _electron as electron } from '@playwright/test'
+import { test, expect, chromium } from '@playwright/test'
+import { spawn } from 'node:child_process'
+import { createServer } from 'node:net'
 import { mkdirSync, copyFileSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -13,14 +15,32 @@ test('portable real mantém dados e preferências ao reabrir', async () => {
   delete env.ELECTRON_RUN_AS_NODE
   delete env.TRANSCREVEDOR_DATA_DIR
   for (let attempt = 0; attempt < 2; attempt++) {
-    const app = await electron.launch({
-      executablePath: executable,
-      args: [],
+    // O launcher NSIS não encaminha stderr ao Playwright: conectamos ao Chromium por porta local.
+    const reservation = createServer()
+    await new Promise<void>((done) => reservation.listen(0, '127.0.0.1', done))
+    const port = (reservation.address() as { port: number }).port
+    await new Promise<void>((done) => reservation.close(() => done()))
+    const child = spawn(executable, [`--remote-debugging-port=${port}`], {
       env,
-      timeout: 120000
+      stdio: 'ignore',
+      windowsHide: true
     })
+    const exited = new Promise<void>((done) => child.once('exit', () => done()))
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await fetch(`http://127.0.0.1:${port}/json/version`)).ok
+          } catch {
+            return false
+          }
+        },
+        { timeout: 120000 }
+      )
+      .toBe(true)
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
+    const page = browser.contexts()[0].pages()[0]
     try {
-      const page = await app.firstWindow()
       await expect(page.getByText('Motor conectado', { exact: true })).toBeVisible({
         timeout: 90000
       })
@@ -37,7 +57,9 @@ test('portable real mantém dados e preferências ao reabrir', async () => {
         await expect(page.locator('html')).not.toHaveClass(/dark/)
       }
     } finally {
-      await app.close()
+      await page.evaluate(() => window.close()).catch(() => {})
+      await browser.close()
+      await exited
     }
   }
   expect(existsSync(join(folder, 'data', 'updates.json'))).toBe(true)
