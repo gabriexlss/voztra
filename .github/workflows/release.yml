@@ -1,0 +1,55 @@
+name: Build Windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: npm ci
+      - run: npm run setup:python
+      - run: npm run lint
+      - run: npm test
+      - run: node scripts/release-notes.mjs
+      - run: npm run build:win
+      - name: Validar pacote e interface
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          node scripts/verify-build.mjs "dist/work/$version/win-unpacked"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:TRANSCREVEDOR_EXECUTABLE = "$PWD/dist/work/$version/win-unpacked/voztra.exe"
+          npm run test:e2e
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/checksums.mjs "dist/releases/$version"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: voztra-windows
+          path: |
+            dist/releases/*/*.exe
+            dist/releases/*/*.blockmap
+            dist/releases/*/latest.yml
+            dist/releases/*/SHA256SUMS.txt
+      - name: Preparar draft da release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag e package.json divergem.' }
+          gh release view "v$version" --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) { Write-Output 'Release existente preservada; artefatos desta execução estão no workflow.'; exit 0 }
+          $files = Get-ChildItem "dist/releases/$version" -File | Where-Object { $_.Name -match '\.(exe|blockmap)$|^latest.yml$|^SHA256SUMS.txt$' } | ForEach-Object { $_.FullName }
+          gh release create "v$version" --draft --verify-tag --title "Voztra $version" --notes-file ".cache/release-notes/$version.md" @files

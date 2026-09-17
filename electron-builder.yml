@@ -1,28 +1,45 @@
 appId: com.transcrevedor.desktop
-productName: Transcrevedor
+productName: Voztra
+asar: true
 directories:
   buildResources: build
-  output: dist
+  output: dist/work/${version}
 files:
   - out/**/*
   - package.json
 extraResources:
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: LICENSE
+    to: LICENSE.voztra.txt
   - from: release/core/transcrevedor-core
     to: core
 win:
-  executableName: transcrevedor
-  target: nsis
+  executableName: voztra
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: Transcrevedor
+  artifactName: Voztra-${version}-win-${arch}-setup.${ext}
+  shortcutName: Voztra
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
+  deleteAppDataOnUninstall: false
+portable:
+  artifactName: Voztra-${version}-win-${arch}-portable.${ext}
+publish:
+  provider: github
+  owner: gabriexlss
+  repo: voztra
+  releaseType: draft
 linux:
   target:
     - AppImage
     - deb
-  maintainer: Transcrevedor
+  maintainer: gabriexlss
   category: AudioVideo
 appImage:
   artifactName: ${name}-${version}.${ext}

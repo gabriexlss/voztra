@@ -1,4 +1,7 @@
 import { createModelHandler } from './model-manager'
+import { dataDirectory, ensureWritable } from './data-paths'
+import { UpdateManager } from './updater'
+import type { UpdateCommand } from '../shared/updates'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join, basename } from 'node:path'
 import { statSync, writeFileSync, readFileSync, renameSync } from 'node:fs'
@@ -9,13 +12,24 @@ import { JobStore } from './storage'
 import { serializeTranscript } from './export'
 import type { AudioFile, BackendEvent, Options, Segment, Snapshot } from '../shared/types'
 
-// Testes podem isolar os dados; o caminho padrão continua sendo userData do Electron.
-if (process.env.TRANSCREVEDOR_DATA_DIR) app.setPath('userData', process.env.TRANSCREVEDOR_DATA_DIR)
-// A interface não depende da GPU do Chromium; desativá-la evita falhas de driver
-// em máquinas sem aceleração gráfica sem alterar a GPU usada pelo core Whisper.
-app.disableHardwareAcceleration()
-app.commandLine.appendSwitch('disable-gpu')
+app.setPath('userData', dataDirectory(app.getPath('appData'), process.env))
+let directoryError: unknown
+try {
+  ensureWritable(app.getPath('userData'))
+} catch (error) {
+  directoryError = error
+}
+// Uma instância por diretório impede escritas concorrentes no mesmo histórico.
+const primaryInstance = directoryError ? true : app.requestSingleInstanceLock()
+if (!primaryInstance) app.quit()
+app.on('second-instance', () => {
+  window?.restore()
+  window?.focus()
+})
+// Alternativa explícita para drivers com falha, sem desativar a GPU de toda instalação.
+if (process.env.VOZTRA_DISABLE_GPU === '1') app.disableHardwareAcceleration()
 const backend = new Backend()
+let updates: UpdateManager
 let window: BrowserWindow | null = null
 let store: JobStore
 let active: string | undefined
@@ -151,6 +165,8 @@ function pumpQueue(): void {
 function createWindow(): void {
   window = new BrowserWindow({
     show: false,
+    title: 'Voztra',
+    icon: join(__dirname, '../renderer/icon.png'),
     width: 1280,
     height: 850,
     minWidth: 900,
@@ -185,10 +201,16 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  if (!primaryInstance) return
   try {
+    if (directoryError) throw directoryError
+    ensureWritable(app.getPath('userData'))
     store = new JobStore(join(app.getPath('userData'), 'history'))
   } catch (error) {
-    dialog.showErrorBox('Não foi possível abrir o histórico', String(error))
+    dialog.showErrorBox(
+      'Não foi possível abrir os dados do Voztra',
+      `Escolha uma pasta com permissão de escrita. No portable, mova o executável e sua pasta data juntos.\n${String(error)}`
+    )
     app.quit()
     return
   }
@@ -224,6 +246,11 @@ app.whenReady().then(() => {
         event.senderFrame !== window?.webContents.mainFrame
       )
         throw new Error('Origem não autorizada.')
+      if (
+        updates?.state.status === 'installing' &&
+        ['start-request', 'start', 'model-action'].includes(channel)
+      )
+        throw new Error('O Voztra está reiniciando para atualizar.')
       return callback(...args)
     })
   }
@@ -237,6 +264,15 @@ app.whenReady().then(() => {
     await shell.openExternal(url.href)
   })
   handle('snapshot', () => state)
+  updates = new UpdateManager(
+    (value) => {
+      if (window && !window.isDestroyed()) window.webContents.send('updates:event', value)
+    },
+    () => !!active || !!state.operation || store.jobs.some((job) => job.status === 'queued')
+  )
+  handle('updates-snapshot', () => updates.state)
+  handle('updates-command', (command) => updates.command(command as UpdateCommand))
+  handle('updates-automatic', (value) => updates.setAutomatic(value))
   handle(
     'model-action',
     createModelHandler({
@@ -426,10 +462,12 @@ app.whenReady().then(() => {
     return true
   })
   createWindow()
+  updates.start()
   backend.start(receive)
 })
 app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
+  updates?.stop()
   if (observationsPath) saveObservations()
   backend.stop()
 })

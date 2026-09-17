@@ -1,4 +1,37 @@
-# Transcrevedor
+<p align="center"><img src="build/icon.png" width="112" alt="Símbolo do Voztra" /></p>
+
+# Voztra
+
+**Sua voz, em texto. No seu computador.**
+
+Transcrição local com modelos Whisper, controle manual da memória e histórico organizado por solicitação. Antes chamado Transcrevedor.
+
+[Baixar para Windows](https://github.com/gabriexlss/voztra/releases/latest) · [Novidades](CHANGELOG.md) · [Contribuir](CONTRIBUTING.md)
+
+## Instalação
+
+| Distribuição Windows x64 | Uso |
+| --- | --- |
+| `Voztra-1.3.0-win-x64-setup.exe` | Instala o aplicativo, cria atalhos e permite baixar atualizações pelo próprio Voztra. |
+| `Voztra-1.3.0-win-x64-portable.exe` | Um executável sem instalação. Salva histórico, modelos e preferências na pasta `data` ao lado dele. |
+
+Python e as bibliotecas de áudio já estão incluídos. Modelos são baixados separadamente pela aba **Modelos**. Para atualizar o portable, feche o app e substitua o executável, mantendo a pasta `data`. O runtime portable é extraído temporariamente na inicialização.
+
+Se você usa Transcrevedor 1.0–1.2, instale a versão 1.3 manualmente uma vez. O Voztra instalado mantém os dados em `%APPDATA%/transcrevedor`; seus modelos e histórico continuam disponíveis. A edição portable tem dados independentes.
+
+As builds atuais não possuem certificado comercial de assinatura. Confira `SHA256SUMS.txt` na release. Linux tem configuração de build, mas ainda não foi validado nem é oferecido como binário oficial.
+
+## Recursos
+
+- Modelos tiny, base, small, medium, large-v1/v2/v3 e turbo, com comparações e estimativas de memória.
+- CPU e NVIDIA CUDA, com compute types compatíveis detectados no dispositivo.
+- Download antecipado, exclusão de modelos e carregamento/descarregamento manual.
+- Progresso por segmentos, tempo decorrido, velocidade e estimativa de conclusão.
+- Histórico por solicitação, vários áudios, edição e exportação TXT/SRT/VTT/JSON.
+- Recursos do aplicativo e do sistema, temas claro/escuro e navegação por teclado.
+- Novidades offline e consulta automática de atualizações configurável.
+
+## Tecnologia
 
 Aplicativo desktop de transcrição local com **Electron + React/Vite + TypeScript** e **Python + faster-whisper**. Base criada com o gerador oficial `npm create @quick-start/electron@latest . -- --template react-ts`.
 
@@ -7,7 +40,7 @@ Aplicativo desktop de transcrição local com **Electron + React/Vite + TypeScri
 Requisitos: Node.js 22.12+ e Python 3.11–3.14. Nesta máquina foi utilizado Python 3.14 no Windows x64. As dependências nativas precisam ter wheels disponíveis para a plataforma escolhida.
 
 ```sh
-npm install
+npm ci
 npm run setup:python
 npm run dev
 ```
@@ -97,7 +130,7 @@ npm run build:win
 npm run build:linux
 ```
 
-Cada comando compila a interface, empacota o core com PyInstaller e gera a distribuição em `dist/`. `npm run build:unpack` gera uma pasta executável, útil para diagnóstico. O core intermediário fica em `release/core/transcrevedor-core/`.
+Cada comando compila a interface, empacota o core com PyInstaller e gera a distribuição em `dist/releases/<versão>/`. `npm run build:unpack` gera uma pasta executável, útil para diagnóstico. O core intermediário fica em `release/core/transcrevedor-core/`. Veja o processo completo de validação, ASAR, bytecode, arquivamento e publicação em [DISTRIBUICAO.md](docs/DISTRIBUICAO.md).
 
 ## Limitações conhecidas
 
@@ -116,4 +149,4 @@ Cada comando compila a interface, empacota o core com PyInstaller e gera a distr
 - [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
 - [CTranslate2: instalação e GPU](https://opennmt.net/CTranslate2/installation.html)
 
-Para testar a pasta empacotada, defina também `TRANSCREVEDOR_EXECUTABLE` com o caminho absoluto de `dist/win-unpacked/transcrevedor.exe`. `backend/requirements-windows.lock` registra todas as versões Python verificadas no Windows; `requirements.txt` é a entrada portátil.
+Para testar a pasta empacotada, defina também `TRANSCREVEDOR_EXECUTABLE` com o caminho absoluto de `dist/work/1.3.0/win-unpacked/voztra.exe`. `backend/requirements-windows.lock` registra todas as versões Python verificadas no Windows; `requirements.txt` é a entrada portátil.

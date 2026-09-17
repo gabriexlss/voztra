@@ -108,6 +108,20 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
     await page.screenshot({ path: '.cache/compute-menu.png', animations: 'disabled' })
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Configurações', exact: true }).click()
+    await expect(page.getByRole('region', { name: 'Atualizações do aplicativo' })).toBeVisible()
+    const automatic = page.getByRole('switch', { name: /Verificar atualizações automaticamente/ })
+    await automatic.uncheck()
+    await expect
+      .poll(async () => page.evaluate(async () => (await window.api.updatesSnapshot()).automatic))
+      .toBe(false)
+    await page.getByRole('button', { name: 'Novidades', exact: true }).click()
+    await expect(page.getByRole('heading', { name: 'Olá, Voztra' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'A primeira versão do Transcrevedor' })
+    ).toBeVisible()
+    await page.screenshot({ path: '.cache/news.png', fullPage: true, animations: 'disabled' })
+    await page.getByRole('button', { name: 'Configurações', exact: true }).click()
+    await expect(automatic).not.toBeChecked()
     await page.getByRole('button', { name: 'Claro', exact: true }).click()
     await expect(page.locator('html')).not.toHaveClass(/dark/)
     await page.screenshot({

@@ -1,9 +1,9 @@
 {
-  "name": "transcrevedor",
-  "version": "1.2.0",
+  "name": "voztra",
+  "version": "1.3.0",
   "description": "Transcrição local de áudio com Whisper, Electron e Python",
   "main": "./out/main/index.js",
-  "author": "Transcrevedor",
+  "author": "gabriexlss",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -15,8 +15,8 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && npm run build:core && electron-builder --dir",
-    "build:win": "npm run build && npm run build:core && electron-builder --win",
-    "build:linux": "npm run build && npm run build:core && electron-builder --linux",
+    "build:win": "npm run build && npm run build:core && electron-builder --win --publish never && node scripts/finalize-build.mjs",
+    "build:linux": "npm run build && npm run build:core && electron-builder --linux --publish never && node scripts/finalize-build.mjs",
     "setup:python": "node scripts/python.mjs setup",
     "test:python": "node scripts/python.mjs test",
     "build:core": "node scripts/python.mjs build",
@@ -60,5 +60,11 @@
     "sharp": "^0.35.4",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/gabriexlss/voztra",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gabriexlss/voztra.git"
   }
 }

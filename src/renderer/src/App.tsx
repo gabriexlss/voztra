@@ -11,7 +11,8 @@ import {
   X,
   Monitor,
   Sun,
-  Moon
+  Moon,
+  NotebookText
 } from 'lucide-react'
 import { Toaster } from 'sonner'
 import { useTranscriber } from './hooks/useTranscriber'
@@ -28,6 +29,10 @@ import { Progress } from './components/ui/progress'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip'
 import { applyTheme, readTheme, type Theme } from './lib/theme'
 import { statusLabels } from './lib/history'
+import { UpdatesPanel } from './components/UpdatesPanel'
+import { ReleaseNotes } from './components/ReleaseNotes'
+import releases from '../../shared/releases.json'
+import brandIcon from './assets/brand/icon.png'
 const pages = [
   {
     id: 'transcription',
@@ -52,6 +57,12 @@ const pages = [
     label: 'Configurações',
     icon: Settings,
     description: 'Ajuste o aplicativo ao seu ambiente de trabalho.'
+  },
+  {
+    id: 'news',
+    label: 'Novidades',
+    icon: NotebookText,
+    description: 'A evolução do Voztra, versão por versão.'
   }
 ]
 const operationLabels: Record<string, string> = {
@@ -79,11 +90,9 @@ export default function App(): JSX.Element {
       <div className="app-shell">
         <aside className="sidebar">
           <div className="flex items-center gap-3 px-3 py-6">
-            <div className="rounded-lg bg-primary text-primary-foreground p-2">
-              <AudioLines className="size-5" />
-            </div>
+            <img src={brandIcon} alt="" className="size-10" />
             <div>
-              <p className="font-semibold tracking-tight">Transcrevedor</p>
+              <p className="font-semibold tracking-tight text-lg">Voztra</p>
               <p className="text-[11px] text-muted-foreground">Áudio para texto</p>
             </div>
           </div>
@@ -115,7 +124,7 @@ export default function App(): JSX.Element {
               <br />
               Seu áudio permanece aqui.
             </p>
-            <p className="text-[10px]">Whisper · CTranslate2 · 1.2.0</p>
+            <p className="text-[10px]">Whisper · CTranslate2 · {releases[0].version}</p>
           </div>
         </aside>
         <div className="min-w-0 flex flex-col">
@@ -214,6 +223,7 @@ export default function App(): JSX.Element {
               </div>
             )}
             <div key={page} className="animate-in fade-in-0 duration-150">
+              {page === 'news' && <ReleaseNotes />}
               {page === 'transcription' && (
                 <div className="grid grid-cols-1 min-[1150px]:grid-cols-[0.8fr_1.2fr] items-start gap-6">
                   <section className="panel">
@@ -307,48 +317,51 @@ export default function App(): JSX.Element {
                 />
               )}
               {page === 'settings' && (
-                <section className="panel">
-                  <h2 className="font-semibold">Aparência</h2>
-                  <p className="help mt-2 mb-5">
-                    Escolha o tema. A preferência fica salva neste computador.
-                  </p>
-                  <div className="grid grid-cols-3 gap-4">
-                    {(
-                      [
-                        { id: 'light', label: 'Claro', icon: Sun },
-                        { id: 'dark', label: 'Escuro', icon: Moon },
-                        { id: 'system', label: 'Acompanhar sistema', icon: Monitor }
-                      ] as const
-                    ).map((t) => (
-                      <Button
-                        key={t.id}
-                        variant={theme === t.id ? 'default' : 'outline'}
-                        className="h-24 flex-col gap-3"
-                        aria-pressed={theme === t.id}
-                        onClick={() => {
-                          setTheme(t.id)
-                          localStorage.setItem('appearance', t.id)
-                          applyTheme(t.id)
-                        }}
-                      >
-                        <t.icon className="size-5" />
-                        {t.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="border-t mt-6 pt-5 space-y-2">
-                    <h3 className="text-sm font-medium">Movimento e acessibilidade</h3>
-                    <p className="help">
-                      Animações respeitam a opção de reduzir movimento do sistema. Os controles
-                      podem ser usados pelo teclado.
+                <div className="space-y-6">
+                  <section className="panel">
+                    <h2 className="font-semibold">Aparência</h2>
+                    <p className="help mt-2 mb-5">
+                      Escolha o tema. A preferência fica salva neste computador.
                     </p>
-                    <h3 className="text-sm font-medium pt-3">Processamento local</h3>
-                    <p className="help">
-                      O modelo só entra na memória quando você clica em Carregar modelo. Downloads e
-                      consultas de tamanho usam a internet; a transcrição ocorre no computador.
-                    </p>
-                  </div>
-                </section>
+                    <div className="grid grid-cols-3 gap-4">
+                      {(
+                        [
+                          { id: 'light', label: 'Claro', icon: Sun },
+                          { id: 'dark', label: 'Escuro', icon: Moon },
+                          { id: 'system', label: 'Acompanhar sistema', icon: Monitor }
+                        ] as const
+                      ).map((t) => (
+                        <Button
+                          key={t.id}
+                          variant={theme === t.id ? 'default' : 'outline'}
+                          className="h-24 flex-col gap-3"
+                          aria-pressed={theme === t.id}
+                          onClick={() => {
+                            setTheme(t.id)
+                            localStorage.setItem('appearance', t.id)
+                            applyTheme(t.id)
+                          }}
+                        >
+                          <t.icon className="size-5" />
+                          {t.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="border-t mt-6 pt-5 space-y-2">
+                      <h3 className="text-sm font-medium">Movimento e acessibilidade</h3>
+                      <p className="help">
+                        Animações respeitam a opção de reduzir movimento do sistema. Os controles
+                        podem ser usados pelo teclado.
+                      </p>
+                      <h3 className="text-sm font-medium pt-3">Processamento local</h3>
+                      <p className="help">
+                        O modelo só entra na memória quando você clica em Carregar modelo. Downloads
+                        e consultas de tamanho usam a internet; a transcrição ocorre no computador.
+                      </p>
+                    </div>
+                  </section>
+                  <UpdatesPanel busy={c.running || !!c.system.operation} />
+                </div>
               )}
             </div>
           </main>

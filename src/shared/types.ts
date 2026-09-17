@@ -131,6 +131,12 @@ export interface Snapshot {
   error?: string
 }
 export interface DesktopAPI {
+  updatesSnapshot(): Promise<import('./updates').UpdateState>
+  updateCommand(
+    command: import('./updates').UpdateCommand
+  ): Promise<import('./updates').UpdateState>
+  setAutomaticUpdates(value: boolean): Promise<import('./updates').UpdateState>
+  onUpdate(callback: (state: import('./updates').UpdateState) => void): () => void
   openReference(url: string): Promise<void>
   modelAction(action: ModelAction, model?: string, options?: Options): Promise<void>
   snapshot(): Promise<Snapshot>

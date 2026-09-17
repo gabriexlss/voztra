@@ -5,6 +5,19 @@ import type { DesktopAPI, BackendEvent } from '../shared/types'
 /** Lista explícita de operações: não expõe IPC genérico ao React. */
 
 const api: DesktopAPI = {
+  updatesSnapshot: () => ipcRenderer.invoke('updates-snapshot'),
+  updateCommand: (command) => ipcRenderer.invoke('updates-command', command),
+  setAutomaticUpdates: (value) => ipcRenderer.invoke('updates-automatic', value),
+  onUpdate: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: import('../shared/updates').UpdateState
+    ): void => callback(data)
+    ipcRenderer.on('updates:event', listener)
+    return () => {
+      ipcRenderer.removeListener('updates:event', listener)
+    }
+  },
   openReference: (url) => ipcRenderer.invoke('open-reference', url),
 
   modelAction: (action, model, options) =>
