@@ -23,6 +23,8 @@ As builds atuais não possuem certificado comercial de assinatura. Confira `SHA2
 
 ## Recursos
 
+![Transcrição local no Voztra](docs/images/transcription.png)
+
 - Modelos tiny, base, small, medium, large-v1/v2/v3 e turbo, com comparações e estimativas de memória.
 - CPU e NVIDIA CUDA, com compute types compatíveis detectados no dispositivo.
 - Download antecipado, exclusão de modelos e carregamento/descarregamento manual.

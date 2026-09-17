@@ -314,6 +314,12 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
       .toBe(true)
     expect(failures).toEqual([])
   } finally {
+    // Uma falha durante transcrição não deve deixar o diálogo nativo de saída prendendo o teste.
+    await app
+      .evaluate(({ dialog }) => {
+        dialog.showMessageBoxSync = () => 1
+      })
+      .catch(() => {})
     await app.close()
   }
 })

@@ -42,6 +42,8 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/wasi-threads": "^1.2.3",
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",

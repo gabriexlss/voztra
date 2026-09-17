@@ -36,11 +36,13 @@ publish:
   repo: voztra
   releaseType: draft
 linux:
+  executableName: voztra
   target:
     - AppImage
     - deb
   maintainer: gabriexlss
   category: AudioVideo
+  artifactName: Voztra-${version}-linux-${arch}.${ext}
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: Voztra-${version}-linux-${arch}.${ext}
 npmRebuild: false
