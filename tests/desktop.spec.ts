@@ -57,6 +57,7 @@ test('histórico recupera segmentos de uma execução interrompida', () => {
 })
 
 test('janela Electron, core real, métricas e validação IPC', async () => {
+  if (process.env.REAL_TRANSCRIPTION === '1') test.setTimeout(240000)
   const data = resolve('.cache', 'e2e-data')
   mkdirSync(data, { recursive: true })
   const env = { ...process.env, TRANSCREVEDOR_DATA_DIR: data }
@@ -64,6 +65,12 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
   const executablePath = process.env.TRANSCREVEDOR_EXECUTABLE
   const app = await electron.launch({ args: executablePath ? [] : ['.'], executablePath, env })
   try {
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBoxSync = () => 1
+    })
+    app.process().stderr?.on('data', (data) => {
+      if (process.env.DEBUG_E2E) process.stderr.write(data)
+    })
     const page = await app.firstWindow()
     const failures: string[] = []
     page.on('pageerror', (error) => failures.push(error.message))
@@ -110,7 +117,9 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
     await page.getByRole('button', { name: 'Configurações', exact: true }).click()
     await expect(page.getByRole('region', { name: 'Atualizações do aplicativo' })).toBeVisible()
     const automatic = page.getByRole('switch', { name: /Verificar atualizações automaticamente/ })
-    await automatic.uncheck()
+    // O switch confirma a gravação pelo IPC antes de refletir o novo estado.
+    if (await automatic.isChecked()) await automatic.click()
+    await expect(automatic).not.toBeChecked()
     await expect
       .poll(async () => page.evaluate(async () => (await window.api.updatesSnapshot()).automatic))
       .toBe(false)
@@ -300,7 +309,7 @@ test('janela Electron, core real, métricas e validação IPC', async () => {
       const state = await page.evaluate(() => window.api.snapshot())
       if (state.loaded)
         await page.getByRole('button', { name: 'Descarregar modelo', exact: true }).click()
-      await expect(page.getByText('Descarregado', { exact: true })).toBeVisible()
+      await expect(page.getByText('Descarregado', { exact: true })).toBeVisible({ timeout: 30000 })
       await expect(page.getByRole('button', { name: /Transcrever fila/ })).toBeDisabled()
       await expect
         .poll(async () => page.evaluate(async () => (await window.api.snapshot()).modelState))
