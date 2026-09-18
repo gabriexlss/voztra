@@ -10,20 +10,20 @@ Transcrição local com modelos Whisper, controle manual da memória e históric
 
 ## Instalação
 
-A tabela abaixo corresponde à release estável 1.3.0. Os recursos 1.4 estão documentados neste código e serão incluídos na próxima release.
+A release 1.4.0 inclui os motores locais e por API. Consulte as notas da release para os problemas conhecidos e os próximos ajustes.
 
 | Distribuição Windows x64            | Uso                                                                                                 |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Voztra-1.3.0-win-x64-setup.exe`    | Instala o aplicativo, cria atalhos e permite baixar atualizações pelo próprio Voztra.               |
-| `Voztra-1.3.0-win-x64-portable.exe` | Um executável sem instalação. Salva histórico, modelos e preferências na pasta `data` ao lado dele. |
+| `Voztra-1.4.0-win-x64-setup.exe`    | Instala o aplicativo, cria atalhos e permite baixar atualizações pelo próprio Voztra.               |
+| `Voztra-1.4.0-win-x64-portable.exe` | Um executável sem instalação. Salva histórico, modelos e preferências na pasta `data` ao lado dele. |
 
 Python e as bibliotecas de áudio já estão incluídos. Modelos são baixados separadamente pela aba **Modelos**. Para atualizar o portable, feche o app e substitua o executável, mantendo a pasta `data`. O runtime portable é extraído temporariamente na inicialização.
 
-Se você usa Transcrevedor 1.0–1.2, instale a versão 1.3 manualmente uma vez. O Voztra instalado mantém os dados em `%APPDATA%/transcrevedor`; seus modelos e histórico continuam disponíveis. A edição portable tem dados independentes.
+Se você usa Transcrevedor 1.0–1.2, instale a versão 1.4 manualmente uma vez. O Voztra instalado mantém os dados em `%APPDATA%/transcrevedor`; seus modelos e histórico continuam disponíveis. A edição portable tem dados independentes.
 
 As builds atuais não possuem certificado comercial de assinatura. Confira `SHA256SUMS.txt` na release.
 
-**Linux x64:** a release também oferece AppImage e `.deb`, gerados e testados em Ubuntu 22.04 no GitHub Actions. No AppImage, conceda permissão de execução (`chmod +x Voztra-1.3.0-linux-x86_64.AppImage`) e abra o arquivo. O pacote `Voztra-1.3.0-linux-amd64.deb` pode ser instalado pelo gerenciador de pacotes. A pasta de dados continua `~/.config/transcrevedor`. Atualizações Linux são baixadas manualmente pela página de releases; outros ambientes gráficos e distribuições não foram validados.
+**Linux x64:** a release também oferece AppImage e `.deb`, gerados e testados em Ubuntu 22.04 no GitHub Actions. No AppImage, conceda permissão de execução (`chmod +x Voztra-1.4.0-linux-x86_64.AppImage`) e abra o arquivo. O pacote `Voztra-1.4.0-linux-amd64.deb` pode ser instalado pelo gerenciador de pacotes. A pasta de dados continua `~/.config/transcrevedor`. Atualizações Linux são baixadas manualmente pela página de releases; outros ambientes gráficos e distribuições não foram validados.
 
 ## Recursos
 
