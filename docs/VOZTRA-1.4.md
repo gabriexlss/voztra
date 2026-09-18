@@ -50,3 +50,5 @@ no computador de desenvolvimento; registrar separadamente a verificação das DL
 - Windows e Linux aprovados no [workflow 35292833725](https://github.com/gabriexlss/voztra/actions/runs/35292833725), commit `236c155`. Linux inclui AppImage e deb.
 - Código salvo na branch `codex/motores-api-nvidia`.
 - Sem release pública 1.4.0 publicada até este checkpoint.
+
+- AppImage e deb do CI baixados e verificados contra SHA-256; todos os pacotes Windows/Linux estão em `dist/releases/1.4.0/`. O arquivo `SHA256SUMS.txt` foi atualizado para o conjunto completo.
