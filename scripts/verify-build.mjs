@@ -23,10 +23,14 @@ const built = JSON.parse(extractFile(archive, 'package.json').toString())
 const current = JSON.parse(readFileSync('package.json', 'utf8'))
 for (const key of ['name', 'version', 'description', 'main'])
   if (built[key] !== current[key]) throw new Error(`Metadado divergente: ${key}`)
-const asset = 'transcrevedor/assets/benchmark.wav'
-if (
-  hash(readFileSync(`backend/${asset}`)) !==
-  hash(readFileSync(`${directory}/resources/core/_internal/${asset}`))
+for (const name of ['benchmark.wav', 'cuda-packages.json']) {
+  const asset = `transcrevedor/assets/${name}`
+  if (
+    hash(readFileSync(`backend/${asset}`)) !==
+    hash(readFileSync(`${directory}/resources/core/_internal/${asset}`))
+  )
+    throw new Error(`Asset divergente: ${name}`)
+}
+console.log(
+  'ASAR, bytecode, preload, renderer, metadados e assets do core verificados por SHA-256.'
 )
-  throw new Error('Benchmark divergente')
-console.log('ASAR, bytecode, preload, renderer, metadados e benchmark verificados por SHA-256.')

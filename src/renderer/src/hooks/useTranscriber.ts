@@ -22,6 +22,7 @@ interface Controller {
   error: string
   clearError: () => void
   stage: string
+  partial: string
   running: boolean
   starting: boolean
   cancelling: boolean
@@ -58,6 +59,7 @@ export function useTranscriber(): Controller {
   const [progress, setProgress] = useState<BackendEvent>()
   const [error, setError] = useState('')
   const [stage, setStage] = useState('Iniciando motor Python…')
+  const [partial, setPartial] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [starting, setStarting] = useState(false)
   const startLock = useRef(false)
@@ -130,6 +132,7 @@ export function useTranscriber(): Controller {
       }
       if (event.type === 'download') setProgress(event)
       if (event.type === 'stage') setStage(event.message || 'Processando…')
+      if (event.type === 'partial') setPartial(event.message || '')
       if (event.type === 'progress') setProgress(event)
       if (event.type === 'segment')
         setJobs((list) =>
@@ -138,6 +141,7 @@ export function useTranscriber(): Controller {
           )
         )
       if (['complete', 'cancelled', 'error', 'fatal'].includes(event.type)) {
+        setPartial('')
         setCancelling(false)
         setStage(
           event.type === 'complete'
@@ -249,6 +253,7 @@ export function useTranscriber(): Controller {
     error,
     clearError: () => setError(''),
     stage,
+    partial,
     running: !!system.activeJobId || system.jobs.some((j) => j.status === 'queued'),
     starting,
     cancelling,

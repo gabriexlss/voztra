@@ -2,19 +2,20 @@ import { test, expect, _electron as electron } from '@playwright/test'
 import { createServer } from 'node:http'
 import { createReadStream, existsSync, statSync } from 'node:fs'
 import { resolve, join, basename } from 'node:path'
+import { version } from '../package.json'
 
 test('atualizador baixa pacote real, preserva fila e só instala por ação explícita', async () => {
   test.skip(process.env.TEST_UPDATER !== '1', 'Requer distribuição e instalador reais.')
   test.setTimeout(300000)
-  const directory = resolve('dist/releases/1.3.0')
+  const directory = resolve('dist/releases', version)
   const server = createServer((request, response) => {
     const name = basename(new URL(request.url!, 'http://localhost').pathname)
     const path = join(directory, name)
     if (
       ![
         'latest.yml',
-        'Voztra-1.3.0-win-x64-setup.exe',
-        'Voztra-1.3.0-win-x64-setup.exe.blockmap'
+        `Voztra-${version}-win-x64-setup.exe`,
+        `Voztra-${version}-win-x64-setup.exe.blockmap`
       ].includes(name) ||
       !existsSync(path)
     ) {
@@ -33,7 +34,7 @@ test('atualizador baixa pacote real, preserva fila e só instala por ação expl
   }
   delete env.ELECTRON_RUN_AS_NODE
   const app = await electron.launch({
-    executablePath: resolve('dist/work/1.3.0/win-unpacked/voztra.exe'),
+    executablePath: resolve('dist/work', version, 'win-unpacked/voztra.exe'),
     args: [],
     env
   })

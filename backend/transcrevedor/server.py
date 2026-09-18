@@ -3,7 +3,7 @@
 import json
 import sys
 import threading
-from .engine import Engine
+import queue
 from .hardware import capabilities, monitor
 from .models import catalog, download_model, delete_model, remote_info
 from .benchmark import run_benchmark
@@ -11,7 +11,16 @@ from .protocol import emit
 
 
 def main():
-    engine = Engine(sys.argv[1])
+    api_mode = len(sys.argv) > 2 and sys.argv[2] == "api"
+    if api_mode:
+        from .engines.remote import RemoteEngine
+
+        engine = RemoteEngine()
+    else:
+        from .engine import Engine
+
+        engine = Engine(sys.argv[1])
+    audio_queue = queue.Queue(maxsize=600)
     stop, cancel = threading.Event(), threading.Event()
     lock = threading.Lock()
     threading.Thread(target=monitor, args=(stop,), daemon=True).start()
@@ -20,8 +29,38 @@ def main():
         result, error = None, None
         operation = command["type"]
         try:
-            if operation == "start":
-                result = engine.run(command, cancel)
+            if operation.startswith("cuda-"):
+                from . import cuda_packages
+
+                if operation == "cuda-status":
+                    result = cuda_packages.status()
+                elif operation == "cuda-install":
+                    result = cuda_packages.install(
+                        cancel,
+                        lambda percent, message: emit(
+                            "download", percent=percent, message=message
+                        ),
+                    )
+                elif operation == "cuda-remove":
+                    result = cuda_packages.remove()
+                else:
+                    raise ValueError("Operação NVIDIA inválida.")
+            elif operation == "start":
+                if api_mode:
+                    command["audioQueue"] = audio_queue
+                    result = engine.run(command, cancel, emit)
+                else:
+                    result = engine.run(command, cancel)
+            elif operation == "api-models" and api_mode:
+                from .engines.http import list_models
+                from .engines.common import safe_error
+
+                try:
+                    result = list_models(command["profile"])
+                except Exception as exc:
+                    raise ValueError(safe_error(exc, command["profile"])) from None
+            elif operation == "api-test" and api_mode:
+                result = engine.test(command["profile"], cancel)
             elif operation == "load":
                 result = engine.load(command["options"])
             elif operation == "catalog":
@@ -74,12 +113,41 @@ def main():
             )
 
     try:
-        emit("ready", **capabilities(), models=catalog(engine.cache))
+        if api_mode:
+            emit("ready", models=[])
+        else:
+            emit("ready", **capabilities(), models=catalog(engine.cache))
         for line in sys.stdin:
             try:
                 command = json.loads(line)
+                if command["type"] == "cuda-status":
+                    # Consulta somente metadados de disco; não disputa o worker de inferência.
+                    from .cuda_packages import status
+
+                    emit(
+                        "response",
+                        requestId=command.get("requestId"),
+                        result=status(),
+                        ok=True,
+                    )
+                    continue
                 if command["type"] == "cancel":
                     cancel.set()
+                    continue
+                if command["type"] in ("live-frame", "live-end") and api_mode:
+                    try:
+                        audio_queue.put_nowait(
+                            command.get("audio")
+                            if command["type"] == "live-frame"
+                            else None
+                        )
+                    except queue.Full:
+                        cancel.set()
+                        emit(
+                            "stage",
+                            jobId=command.get("jobId"),
+                            message="O provedor não acompanha o microfone. Buffer de 60 segundos esgotado; cancelando a gravação.",
+                        )
                     continue
                 if not lock.acquire(blocking=False):
                     emit(
@@ -91,6 +159,9 @@ def main():
                     )
                     continue
                 cancel.clear()
+                if command["type"] == "start":
+                    while not audio_queue.empty():
+                        audio_queue.get_nowait()
                 threading.Thread(target=execute, args=(command,), daemon=True).start()
             except Exception as error:
                 emit("error", message=str(error))

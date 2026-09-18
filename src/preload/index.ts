@@ -5,6 +5,15 @@ import type { DesktopAPI, BackendEvent } from '../shared/types'
 /** Lista explícita de operações: não expõe IPC genérico ao React. */
 
 const api: DesktopAPI = {
+  cudaAction: (action) => ipcRenderer.invoke('cuda-action', action),
+  saveEngine: (profile, key, remember) => ipcRenderer.invoke('engine-save', profile, key, remember),
+  deleteEngine: (id) => ipcRenderer.invoke('engine-delete', id),
+  switchEngine: (id) => ipcRenderer.invoke('engine-switch', id),
+  engineModels: (id) => ipcRenderer.invoke('engine-models', id),
+  testEngine: (id) => ipcRenderer.invoke('engine-test', id),
+  startMicrophone: () => ipcRenderer.invoke('microphone-start'),
+  microphoneFrame: (id, audio) => ipcRenderer.invoke('microphone-frame', id, audio),
+  finishMicrophone: (id) => ipcRenderer.invoke('microphone-end', id),
   updatesSnapshot: () => ipcRenderer.invoke('updates-snapshot'),
   updateCommand: (command) => ipcRenderer.invoke('updates-command', command),
   setAutomaticUpdates: (value) => ipcRenderer.invoke('updates-automatic', value),

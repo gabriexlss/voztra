@@ -1,14 +1,8 @@
-import {
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  existsSync,
-  copyFileSync
-} from 'node:fs'
+import { mkdirSync, readFileSync, existsSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Job, TranscriptionRequest } from '../shared/types'
+import { writeAtomic } from './atomic-file'
 
 /** Histórico versionado e atômico. O arquivo anterior permanece intacto na migração. */
 export class JobStore {
@@ -48,11 +42,6 @@ export class JobStore {
     this.save()
   }
   save(): void {
-    writeFileSync(
-      this.path + '.tmp',
-      JSON.stringify({ version: 2, jobs: this.jobs, requests: this.requests }),
-      'utf8'
-    )
-    renameSync(this.path + '.tmp', this.path)
+    writeAtomic(this.path, JSON.stringify({ version: 2, jobs: this.jobs, requests: this.requests }))
   }
 }

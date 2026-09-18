@@ -8,6 +8,7 @@ export interface Options {
   vad: boolean
 }
 export interface Segment {
+  timing?: 'approximate' | 'provider'
   start: number
   end: number
   text: string
@@ -40,6 +41,9 @@ export interface Metrics {
   }[]
 }
 export interface Job {
+  engine?: import('./engines').EngineProfile
+  usage?: unknown
+  microphone?: boolean
   id: string
   requestId?: string
   displayName?: string
@@ -78,6 +82,7 @@ export interface BenchmarkResult {
 export type ModelAction =
   'load' | 'unload' | 'download' | 'delete' | 'catalog' | 'metadata' | 'benchmark'
 export interface BackendEvent {
+  usage?: unknown
   type: string
   requestId?: string
   ok?: boolean
@@ -113,6 +118,7 @@ export interface TranscriptionRequest {
   jobIds: string[]
 }
 export interface Snapshot {
+  engines?: import('./engines').EngineState
   requests: TranscriptionRequest[]
   activeJobId?: string
   modelState: 'unloaded' | 'loading' | 'loaded' | 'unloading'
@@ -131,6 +137,19 @@ export interface Snapshot {
   error?: string
 }
 export interface DesktopAPI {
+  cudaAction(action: 'status' | 'install' | 'remove'): Promise<import('./engines').CudaStatus>
+  saveEngine(
+    profile: import('./engines').EngineProfile,
+    key?: string,
+    remember?: boolean
+  ): Promise<import('./engines').EngineProfile>
+  deleteEngine(id: string): Promise<void>
+  switchEngine(id: string): Promise<void>
+  engineModels(id: string): Promise<import('./engines').RemoteModel[]>
+  testEngine(id: string): Promise<import('./engines').EngineTest>
+  startMicrophone(): Promise<string>
+  microphoneFrame(jobId: string, audio: string): Promise<void>
+  finishMicrophone(jobId: string): Promise<void>
   updatesSnapshot(): Promise<import('./updates').UpdateState>
   updateCommand(
     command: import('./updates').UpdateCommand

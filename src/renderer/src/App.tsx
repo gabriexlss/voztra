@@ -33,12 +33,23 @@ import { UpdatesPanel } from './components/UpdatesPanel'
 import { ReleaseNotes } from './components/ReleaseNotes'
 import releases from '../../shared/releases.json'
 import brandIcon from './assets/brand/icon.png'
+import { EnginesPage } from './components/engines/EnginesPage'
+import { EngineSwitcher } from './components/engines/EngineSwitcher'
+import { MicrophonePanel } from './components/engines/MicrophonePanel'
+import { useMicrophone } from './hooks/useMicrophone'
+import { isLive } from '../../shared/engines'
 const pages = [
   {
     id: 'transcription',
     label: 'Transcrição',
     icon: AudioLines,
-    description: 'Transforme seus áudios em texto, no seu computador.'
+    description: 'Transforme seus áudios em texto com o motor de sua escolha.'
+  },
+  {
+    id: 'engines',
+    label: 'Motores',
+    icon: Settings,
+    description: 'Whisper local, provedores de API e servidores personalizados.'
   },
   {
     id: 'models',
@@ -66,6 +77,11 @@ const pages = [
   }
 ]
 const operationLabels: Record<string, string> = {
+  'cuda-install': 'Instalando suporte NVIDIA',
+  'cuda-remove': 'Removendo suporte NVIDIA',
+  'switch-engine': 'Encerrando motor anterior',
+  'api-test': 'Testando com áudio sintético',
+  'api-models': 'Consultando modelos do provedor',
   load: 'Carregando modelo na memória',
   unload: 'Liberando memória',
   download: 'Baixando modelo',
@@ -77,6 +93,9 @@ const operationLabels: Record<string, string> = {
 /** Estrutura persistente: trocar páginas não desmonta o controlador nem interrompe o motor. */
 export default function App(): JSX.Element {
   const c = useTranscriber()
+  const capture = useMicrophone()
+  const remote = !!c.system.engines && c.system.engines.activeId !== 'whisper'
+  const connection = c.system.engines?.profiles.find((p) => p.id === c.system.engines?.activeId)
   const [page, setPage] = useState('transcription')
   useEffect(
     () =>
@@ -137,11 +156,13 @@ export default function App(): JSX.Element {
               <span>{c.system.ready ? 'Motor conectado' : 'Iniciando motor…'}</span>
             </div>
             <p className="leading-relaxed">
-              Processamento local.
+              {remote ? 'Processamento por API.' : 'Processamento local.'}
               <br />
-              Seu áudio permanece aqui.
+              {remote ? 'Áudio enviado ao servidor configurado.' : 'Seu áudio permanece aqui.'}
             </p>
-            <p className="text-[10px]">Whisper · CTranslate2 · {releases[0].version}</p>
+            <p className="text-[10px]">
+              {remote ? connection?.name : 'Whisper · CTranslate2'} · {releases[0].version}
+            </p>
           </div>
         </aside>
         <div className="min-w-0 flex flex-col">
@@ -149,25 +170,32 @@ export default function App(): JSX.Element {
             <div>
               <span className="text-sm font-medium">{current.label}</span>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-expanded={resources}
-                  onClick={() => setResources(!resources)}
-                >
-                  <Activity className="size-4" />
-                  <span className="tabular-nums text-xs">
-                    CPU {c.metrics ? `${c.metrics.cpu.toFixed(0)}%` : '—'}
-                    <span className="mx-3 text-border">|</span>RAM{' '}
-                    {c.metrics ? `${(c.metrics.ram / 1024 ** 3).toFixed(1)} GiB` : '—'}
-                  </span>
-                  <ChevronDown className={resources ? 'rotate-180' : ''} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Uso do sistema e do aplicativo</TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-3 ml-auto">
+              <EngineSwitcher
+                state={c.system.engines}
+                busy={c.running || !!c.system.operation || !c.system.ready || capture.starting}
+                onManage={() => setPage('engines')}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={resources}
+                    onClick={() => setResources(!resources)}
+                  >
+                    <Activity className="size-4" />
+                    <span className="tabular-nums text-xs">
+                      CPU {c.metrics ? `${c.metrics.cpu.toFixed(0)}%` : '—'}
+                      <span className="mx-3 text-border">|</span>RAM{' '}
+                      {c.metrics ? `${(c.metrics.ram / 1024 ** 3).toFixed(1)} GiB` : '—'}
+                    </span>
+                    <ChevronDown className={resources ? 'rotate-180' : ''} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Uso do sistema e do aplicativo</TooltipContent>
+              </Tooltip>
+            </div>
           </header>
           {resources && (
             <div className="px-7 py-5 border-b bg-card">
@@ -197,19 +225,34 @@ export default function App(): JSX.Element {
                 </Button>
               </div>
             )}
-            <div className="mb-6">
-              <ModelControl
-                compact={page !== 'transcription'}
-                system={c.system}
-                options={c.options}
-                metrics={c.metrics}
-                running={c.running}
-                onChange={c.setOptions}
-                onAction={c.modelAction}
-                onSettings={() => setPage('models')}
-                onConfigure={() => setPage('transcription')}
-              />
-            </div>
+            {!remote && (
+              <div className="mb-6">
+                <ModelControl
+                  compact={page !== 'transcription'}
+                  system={c.system}
+                  options={c.options}
+                  metrics={c.metrics}
+                  running={c.running}
+                  onChange={c.setOptions}
+                  onAction={c.modelAction}
+                  onSettings={() => setPage('models')}
+                  onConfigure={() => setPage('transcription')}
+                />
+              </div>
+            )}
+            {remote && page === 'transcription' && (
+              <div className="panel mb-6 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">
+                    {connection?.name} · {connection?.model || 'Escolha um modelo'}
+                  </p>
+                  <p className="help break-all mt-1">Destino: {connection?.baseUrl}</p>
+                </div>
+                <Button variant="outline" onClick={() => setPage('engines')}>
+                  Configurar motor
+                </Button>
+              </div>
+            )}
             {c.system.operation && (
               <div className="panel mb-6 space-y-3" role="status">
                 <div className="flex items-center gap-3">
@@ -217,13 +260,20 @@ export default function App(): JSX.Element {
                   <strong className="text-sm flex-1">
                     {operationLabels[c.system.operation]} · {c.system.operationModel}
                   </strong>
-                  {['load', 'download', 'benchmark'].includes(c.system.operation) && (
+                  {[
+                    'load',
+                    'download',
+                    'benchmark',
+                    'cuda-install',
+                    'api-test',
+                    'api-models'
+                  ].includes(c.system.operation) && (
                     <Button variant="outline" size="sm" disabled={c.cancelling} onClick={c.cancel}>
                       Cancelar operação
                     </Button>
                   )}
                 </div>
-                {c.system.operation === 'download' && (
+                {['download', 'cuda-install'].includes(c.system.operation) && (
                   <>
                     <Progress
                       aria-label="Download do modelo"
@@ -233,13 +283,27 @@ export default function App(): JSX.Element {
                       {c.progress?.type === 'download'
                         ? c.progress.message
                         : 'Conectando ao repositório…'}{' '}
-                      · progresso por arquivos, não bytes.
+                      {c.system.operation === 'download'
+                        ? ' · progresso por arquivos, não bytes.'
+                        : ' · download, verificação e extração das DLLs.'}
                     </p>
                   </>
                 )}
               </div>
             )}
             <div key={page} className="animate-in fade-in-0 duration-150">
+              {page === 'engines' && (
+                <EnginesPage
+                  state={c.system.engines}
+                  busy={c.running || !!c.system.operation || capture.starting}
+                />
+              )}
+              {page === 'transcription' && isLive(connection?.protocol) && (
+                <MicrophonePanel
+                  capture={capture}
+                  busy={c.running || !!c.system.operation || !c.system.ready}
+                />
+              )}
               {page === 'news' && <ReleaseNotes />}
               {page === 'transcription' && (
                 <div className="grid grid-cols-1 min-[1150px]:grid-cols-[0.8fr_1.2fr] items-start gap-6">
@@ -249,11 +313,13 @@ export default function App(): JSX.Element {
                       <span className="help">{c.files.length} selecionado(s)</span>
                     </div>
                     <FileQueue files={c.files} onAdd={c.addFiles} onRemove={c.remove} />
-                    <SettingsPanel
-                      options={c.options}
-                      disabled={c.running}
-                      onChange={c.setOptions}
-                    />
+                    {!remote && (
+                      <SettingsPanel
+                        options={c.options}
+                        disabled={c.running}
+                        onChange={c.setOptions}
+                      />
+                    )}
                     {c.running && !!c.files.length && (
                       <p className="help mt-4">Estes novos arquivos ficam para o próximo envio.</p>
                     )}
@@ -265,7 +331,7 @@ export default function App(): JSX.Element {
                       stage={
                         c.running
                           ? c.stage
-                          : c.system.modelState === 'loaded'
+                          : (remote ? !!connection?.model : c.system.modelState === 'loaded')
                             ? c.progress?.percent === 100
                               ? 'Transcrição concluída'
                               : 'Pronto para transcrever'
@@ -277,7 +343,8 @@ export default function App(): JSX.Element {
                       canStart={
                         !!c.files.length &&
                         c.system.ready &&
-                        c.system.modelState === 'loaded' &&
+                        (remote ? !!connection?.model : c.system.modelState === 'loaded') &&
+                        !capture.starting &&
                         !c.system.operation &&
                         !c.starting
                       }
@@ -310,6 +377,12 @@ export default function App(): JSX.Element {
                         </div>
                       </div>
                     )}
+                    {!!c.partial && (
+                      <div role="status" className="panel text-sm text-muted-foreground">
+                        <p className="help mb-2">Prévia Live · pode mudar até a confirmação</p>
+                        {c.partial}
+                      </div>
+                    )}
                     <TranscriptPanel job={job} onEdit={c.edit} onExport={c.exportJob} />
                   </div>
                 </div>
@@ -318,7 +391,7 @@ export default function App(): JSX.Element {
                 <ModelLibrary
                   system={c.system}
                   metrics={c.metrics}
-                  running={c.running}
+                  running={c.running || remote}
                   onAction={c.modelAction}
                 />
               )}
@@ -373,7 +446,8 @@ export default function App(): JSX.Element {
                       <h3 className="text-sm font-medium pt-3">Processamento local</h3>
                       <p className="help">
                         O modelo só entra na memória quando você clica em Carregar modelo. Downloads
-                        e consultas de tamanho usam a internet; a transcrição ocorre no computador.
+                        e consultas de tamanho usam a internet. Com Whisper, a transcrição ocorre no
+                        computador; motores de API enviam o áudio ao servidor escolhido.
                       </p>
                     </div>
                   </section>

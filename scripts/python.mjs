@@ -22,8 +22,10 @@ if (action === 'setup') {
     ])
   run(python, ['-m', 'pip', 'install', '-r', 'backend/requirements.txt'])
 } else if (action === 'test') {
+  run(python, ['-m', 'compileall', '-q', 'backend'])
   run(python, ['-m', 'unittest', 'discover', '-s', 'backend/tests', '-v'])
 } else if (action === 'build') {
+  if (windows && process.env.VOZTRA_BUNDLE_CUDA === '1') run(python, ['scripts/prepare-cuda.py'])
   run(python, [
     '-m',
     'PyInstaller',
@@ -53,8 +55,14 @@ if (action === 'setup') {
     'tokenizers',
     '--collect-all',
     'huggingface_hub',
+    '--collect-all',
+    'websockets',
+    '--collect-all',
+    'httpx',
     'backend/entry.py'
   ])
+  if (windows && process.env.VOZTRA_BUNDLE_CUDA === '1')
+    run(python, ['scripts/prepare-cuda.py', '--copy'])
 } else {
   console.error('Use setup, test ou build.')
   process.exit(1)

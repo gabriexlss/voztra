@@ -2,6 +2,14 @@
 
 As datas originais das versões legadas não foram confirmadas.
 
+## 1.4.0 — Motores e provedores
+
+- Aba Motores e acesso rápido para alternar entre Whisper, Gemini, OpenAI e servidores locais ou personalizados.
+- Modelos consultados livremente, teste explícito com áudio, instruções personalizadas e parâmetros JSON.
+- Protocolos Live com arquivos e microfone; encerramento do motor anterior ao trocar e bloqueio durante transcrição.
+- Credenciais protegidas pelo sistema ou mantidas somente na sessão; histórico identifica o motor utilizado.
+- Suporte NVIDIA opcional no Windows: baixar e remover bibliotecas CUDA sem instalar o Toolkit.
+
 ## 1.3.0 — Olá, Voztra
 
 - Nova identidade visual: nome Voztra, símbolo e ícones próprios.

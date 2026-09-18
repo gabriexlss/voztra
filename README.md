@@ -4,11 +4,13 @@
 
 **Sua voz, em texto. No seu computador.**
 
-Transcrição local com modelos Whisper, controle manual da memória e histórico organizado por solicitação. Antes chamado Transcrevedor.
+Transcrição local com modelos Whisper, controle manual da memória e histórico organizado por solicitação. A versão 1.4 adiciona motores Gemini, OpenAI e servidores personalizados, inclusive locais, com protocolos de arquivos e Live. Antes chamado Transcrevedor.
 
 [Baixar para Windows](https://github.com/gabriexlss/voztra/releases/latest) · [Novidades](CHANGELOG.md) · [Contribuir](CONTRIBUTING.md)
 
 ## Instalação
+
+A tabela abaixo corresponde à release estável 1.3.0. Os recursos 1.4 estão documentados neste código e serão incluídos na próxima release.
 
 | Distribuição Windows x64            | Uso                                                                                                 |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -34,6 +36,11 @@ As builds atuais não possuem certificado comercial de assinatura. Confira `SHA2
 - Histórico por solicitação, vários áudios, edição e exportação TXT/SRT/VTT/JSON.
 - Recursos do aplicativo e do sistema, temas claro/escuro e navegação por teclado.
 - Novidades offline e consulta automática de atualizações configurável.
+- Aba Motores, troca rápida, listagem livre, teste explícito, prompts e parâmetros JSON.
+- APIs com chaves protegidas pelo sistema ou mantidas somente na sessão; Live com arquivos e microfone.
+- Download opcional das bibliotecas NVIDIA no Windows, sem exigir CUDA Toolkit e sem aumentar a build padrão.
+
+Consulte [Motores e suporte NVIDIA](docs/MOTORES.md) para configuração, protocolos, exemplos JSON e limites. As APIs enviam o áudio ao endereço configurado; o modo Whisper continua local.
 
 ## Tecnologia
 
@@ -95,7 +102,7 @@ O processador é identificado pelo registro do Windows ou `/proc/cpuinfo` no Lin
 - **AMD/Intel:** use CPU nesta versão. Outro backend será necessário para aceleração dessas placas.
 - **Linux:** AppImage/deb construídos em Ubuntu 22.04, com testes da interface empacotada e conexão ao motor Python no GitHub Actions. Transcrição real e testes portable/atualizador foram executados no Windows.
 
-O instalador inclui Python e as dependências do core, mas não os modelos nem o driver NVIDIA. Bibliotecas CUDA do sistema devem estar acessíveis no PATH (Windows) ou no carregador de bibliotecas (Linux).
+O instalador inclui Python e as dependências do core, mas não os modelos nem o driver NVIDIA. No Windows 1.4, instale as DLLs opcionalmente pela aba Motores. No Linux, bibliotecas CUDA devem estar acessíveis ao carregador de bibliotecas do sistema.
 
 ## Dados e continuidade
 

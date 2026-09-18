@@ -1,6 +1,9 @@
 """Ponto de entrada usado no desenvolvimento e no executável empacotado."""
 
 import sys
+from transcrevedor.cuda_runtime import configure
+
+configure()
 from transcrevedor.server import main
 
 if __name__ == "__main__":

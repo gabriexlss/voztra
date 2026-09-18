@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.4.0",
+    "title": "Motores e provedores",
+    "changes": [
+      "Aba Motores e acesso rápido para alternar entre Whisper, Gemini, OpenAI e servidores locais ou personalizados.",
+      "Modelos consultados livremente, teste explícito com áudio, instruções personalizadas e parâmetros JSON.",
+      "Protocolos Live com arquivos e microfone; encerramento do motor anterior ao trocar e bloqueio durante transcrição.",
+      "Credenciais protegidas pelo sistema ou mantidas somente na sessão; histórico identifica o motor utilizado.",
+      "Suporte NVIDIA opcional no Windows: baixar e remover bibliotecas CUDA sem instalar o Toolkit."
+    ]
+  },
+  {
     "version": "1.3.0",
     "title": "Olá, Voztra",
     "changes": [

@@ -1,10 +1,15 @@
 import { createModelHandler } from './model-manager'
 import { dataDirectory, ensureWritable } from './data-paths'
 import { UpdateManager } from './updater'
+import { EngineProfiles } from './engine-profiles'
+import { createEngineManager } from './engine-manager'
+import { isLive } from '../shared/engines'
+import { cudaManager } from './cuda-manager'
 import type { UpdateCommand } from '../shared/updates'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { join, basename } from 'node:path'
-import { statSync, writeFileSync, readFileSync, renameSync } from 'node:fs'
+import { statSync, writeFileSync, readFileSync } from 'node:fs'
+import { writeAtomic } from './atomic-file'
 import { randomUUID } from 'node:crypto'
 import { is } from '@electron-toolkit/utils'
 import { Backend } from './backend'
@@ -32,6 +37,7 @@ const backend = new Backend()
 let updates: UpdateManager
 let window: BrowserWindow | null = null
 let store: JobStore
+let profiles: EngineProfiles
 let active: string | undefined
 const imported = new Map<string, AudioFile>()
 const state: Snapshot = {
@@ -48,14 +54,14 @@ const state: Snapshot = {
 }
 let observationsPath: string
 function publish(): void {
+  if (profiles) state.engines = profiles.snapshot()
   state.activeJobId = active
   if (window && !window.isDestroyed())
     window.webContents.send('core:event', { type: 'state', snapshot: state })
 }
 function saveObservations(): void {
   // A troca atômica preserva a última medição íntegra se o processo for interrompido.
-  writeFileSync(observationsPath + '.tmp', JSON.stringify(state.observations), 'utf8')
-  renameSync(observationsPath + '.tmp', observationsPath)
+  writeAtomic(observationsPath, JSON.stringify(state.observations))
 }
 function resetCore(): void {
   backend.stop()
@@ -64,7 +70,7 @@ function resetCore(): void {
   state.loaded = undefined
   saveObservations()
   publish()
-  backend.start(receive)
+  backend.start(receive, profiles?.activeId === 'whisper' ? 'whisper' : 'api')
 }
 
 /** Somente arquivos escolhidos ou soltos pelo usuário recebem identificadores válidos. */
@@ -81,11 +87,13 @@ function importFiles(paths: string[]): AudioFile[] {
 function receive(event: BackendEvent): void {
   if (event.type === 'ready') {
     state.ready = true
-    state.devices = event.devices || []
-    state.threads = event.threads || 1
-    state.cpuName = event.cpuName || 'Não identificado'
-    state.totalRam = event.totalRam || 0
-    state.models = event.models || []
+    if (profiles.activeId === 'whisper') {
+      state.devices = event.devices || []
+      state.threads = event.threads || 1
+      state.cpuName = event.cpuName || 'Não identificado'
+      state.totalRam = event.totalRam || 0
+      state.models = event.models || []
+    }
     state.error = undefined
     publish()
   }
@@ -125,6 +133,7 @@ function receive(event: BackendEvent): void {
   }
   const job = store.jobs.find((item) => item.id === event.jobId)
   if (job) {
+    if (event.usage) job.usage = event.usage
     if (event.segment) job.segments.push(event.segment)
     if (event.message) job.message = event.message
     if (['complete', 'cancelled', 'error', 'fatal'].includes(event.type)) {
@@ -147,7 +156,13 @@ function receive(event: BackendEvent): void {
 
 /** A fila pertence ao processo principal; navegar entre abas não altera a solicitação. */
 function pumpQueue(): void {
-  if (active || !state.ready || !state.loaded || state.operation) return
+  if (
+    active ||
+    !state.ready ||
+    (profiles.activeId === 'whisper' && !state.loaded) ||
+    state.operation
+  )
+    return
   const job = store.jobs.find((item) => item.status === 'queued')
   if (!job) return
   active = job.id
@@ -156,7 +171,17 @@ function pumpQueue(): void {
   store.save()
   publish()
   try {
-    backend.send({ type: 'start', jobId: job.id, path: job.file.path, options: job.options })
+    const profile = job.engine
+      ? { ...job.engine, apiKey: profiles.credentials(job.engine.id).apiKey }
+      : undefined
+    backend.send({
+      type: 'start',
+      jobId: job.id,
+      path: job.file.path,
+      options: job.options,
+      profile,
+      microphone: job.microphone
+    })
   } catch (error) {
     receive({ type: 'error', jobId: job.id, message: String(error) })
   }
@@ -206,6 +231,7 @@ app.whenReady().then(() => {
     if (directoryError) throw directoryError
     ensureWritable(app.getPath('userData'))
     store = new JobStore(join(app.getPath('userData'), 'history'))
+    profiles = new EngineProfiles(join(app.getPath('userData'), 'engines.json'))
   } catch (error) {
     dialog.showErrorBox(
       'Não foi possível abrir os dados do Voztra',
@@ -248,7 +274,16 @@ app.whenReady().then(() => {
         throw new Error('Origem não autorizada.')
       if (
         updates?.state.status === 'installing' &&
-        ['start-request', 'start', 'model-action'].includes(channel)
+        [
+          'start-request',
+          'start',
+          'model-action',
+          'engine-save',
+          'engine-switch',
+          'engine-test',
+          'cuda-action',
+          'microphone-start'
+        ].includes(channel)
       )
         throw new Error('O Voztra está reiniciando para atualizar.')
       return callback(...args)
@@ -264,6 +299,35 @@ app.whenReady().then(() => {
     await shell.openExternal(url.href)
   })
   handle('snapshot', () => state)
+  state.engines = profiles.snapshot()
+  const engineBusy = (): boolean => !!active || store.jobs.some((j) => j.status === 'queued')
+  const engines = createEngineManager({
+    backend,
+    profiles,
+    state,
+    busy: engineBusy,
+    publish,
+    receive,
+    window: () => window!
+  })
+  handle('engine-switch', (id) => engines.switchTo(String(id)))
+  handle(
+    'cuda-action',
+    cudaManager({ backend, state, busy: engineBusy, publish, receive, window: () => window! })
+  )
+  handle('engine-save', (profile, key, remember) => {
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    const result = profiles.save(profile, key, remember)
+    publish()
+    return result
+  })
+  handle('engine-delete', (id) => {
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    profiles.delete(String(id))
+    publish()
+  })
+  handle('engine-models', (id) => engines.run(String(id), 'api-models'))
+  handle('engine-test', (id) => engines.run(String(id), 'api-test'))
   updates = new UpdateManager(
     (value) => {
       if (window && !window.isDestroyed()) window.webContents.send('updates:event', value)
@@ -278,7 +342,7 @@ app.whenReady().then(() => {
     createModelHandler({
       state,
       backend,
-      isTranscribing: () => !!active || store.jobs.some((job) => job.status === 'queued'),
+      isTranscribing: () => profiles.activeId !== 'whisper' || engineBusy(),
       getWindow: () => window!,
       resetCore,
       publish,
@@ -318,7 +382,17 @@ app.whenReady().then(() => {
       throw new Error('Solicitação inválida.')
     const files = ids.map((id) => imported.get(String(id)))
     const file = files[0]
-    const options = input as Options
+    const profile = profiles.activeId === 'whisper' ? undefined : profiles.get()
+    const options = profile
+      ? {
+          model: profile.model,
+          device: 'api',
+          computeType: 'api',
+          language: '',
+          threads: 1,
+          vad: false
+        }
+      : (input as Options)
     const device = state.devices.find((d) => d.id === options?.device)
     if (
       active ||
@@ -327,30 +401,32 @@ app.whenReady().then(() => {
       files.some((item) => !item) ||
       store.jobs.some((item) => item.status === 'queued') ||
       state.operation ||
-      !state.loaded ||
-      state.modelState !== 'loaded'
+      (!profile && (!state.loaded || state.modelState !== 'loaded'))
     )
       throw new Error('Não é possível iniciar esta transcrição.')
+    if (profile && !profile.model.trim()) throw new Error('Informe um modelo na aba Motores.')
     if (
-      !device ||
-      !['tiny', 'base', 'small', 'medium', 'large-v1', 'large-v2', 'large-v3', 'turbo'].includes(
-        options.model
-      ) ||
-      (options.computeType !== 'auto' && !device.computeTypes.includes(options.computeType)) ||
-      !Number.isInteger(options.threads) ||
-      options.threads < 1 ||
-      options.threads > state.threads ||
-      typeof options.language !== 'string' ||
-      options.language.length > 8 ||
-      typeof options.vad !== 'boolean'
+      !profile &&
+      (!device ||
+        !['tiny', 'base', 'small', 'medium', 'large-v1', 'large-v2', 'large-v3', 'turbo'].includes(
+          options.model
+        ) ||
+        (options.computeType !== 'auto' && !device.computeTypes.includes(options.computeType)) ||
+        !Number.isInteger(options.threads) ||
+        options.threads < 1 ||
+        options.threads > state.threads ||
+        typeof options.language !== 'string' ||
+        options.language.length > 8 ||
+        typeof options.vad !== 'boolean')
     )
       throw new Error('Configuração inválida.')
     if (
-      !state.loaded ||
-      ['model', 'device', 'threads'].some(
-        (field) => options[field as keyof Options] !== state.loaded![field as keyof Options]
-      ) ||
-      !['auto', state.loaded.computeType].includes(options.computeType)
+      !profile &&
+      (!state.loaded ||
+        ['model', 'device', 'threads'].some(
+          (field) => options[field as keyof Options] !== state.loaded![field as keyof Options]
+        ) ||
+        !['auto', state.loaded.computeType].includes(options.computeType))
     )
       throw new Error('Use a configuração do modelo carregado.')
     const requestId = randomUUID()
@@ -360,6 +436,8 @@ app.whenReady().then(() => {
       requestId,
       file: file!,
       options: { ...options },
+      engine: profile,
+      microphone: file?.path === '',
       segments: [],
       status: 'queued' as const,
       createdAt
@@ -381,6 +459,28 @@ app.whenReady().then(() => {
   }
   handle('start-request', startRequest)
   handle('start', (id, input) => startRequest([id], input).jobs[0])
+  handle('microphone-start', () => {
+    if (profiles.activeId === 'whisper' || !isLive(profiles.get().protocol))
+      throw new Error('Selecione um protocolo Live para usar o microfone.')
+    const id = randomUUID()
+    imported.set(id, { id, name: 'Microfone · ' + new Date().toLocaleString('pt-BR'), path: '' })
+    try {
+      return startRequest([id], {}).activeJobId
+    } finally {
+      imported.delete(id)
+    }
+  })
+  handle('microphone-frame', (id, audio) => {
+    if (active !== id || !store.jobs.find((j) => j.id === id)?.microphone)
+      throw new Error('Sessão de microfone inativa.')
+    if (typeof audio !== 'string' || audio.length > 12800 || !/^[A-Za-z0-9+/]*={0,2}$/.test(audio))
+      throw new Error('Bloco PCM inválido.')
+    backend.send({ type: 'live-frame', jobId: id, audio })
+  })
+  handle('microphone-end', (id) => {
+    if (active !== id || !store.jobs.find((j) => j.id === id)?.microphone) return
+    backend.send({ type: 'live-end', jobId: id })
+  })
   handle('rename', (kind, id, title) => {
     if (
       !['request', 'job'].includes(String(kind)) ||
@@ -425,7 +525,10 @@ app.whenReady().then(() => {
       resetCore()
       receive({
         type: 'restarting',
-        message: 'Modelo descarregado após cancelamento. Carregue-o novamente para transcrever.'
+        message:
+          profiles.activeId === 'whisper'
+            ? 'Modelo descarregado após cancelamento. Carregue-o novamente para transcrever.'
+            : 'Conexão encerrada após cancelamento. O provedor pode cobrar áudio já recebido.'
       })
     }, 2000)
     timer.unref()
@@ -463,7 +566,7 @@ app.whenReady().then(() => {
   })
   createWindow()
   updates.start()
-  backend.start(receive)
+  backend.start(receive, profiles.activeId === 'whisper' ? 'whisper' : 'api')
 })
 app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {

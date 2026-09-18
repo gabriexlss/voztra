@@ -30,7 +30,7 @@ export class Backend {
     for (const request of this.requests.values()) request.reject(new Error(message))
     this.requests.clear()
   }
-  start(onEvent: (event: BackendEvent) => void): void {
+  start(onEvent: (event: BackendEvent) => void, mode: 'whisper' | 'api' = 'whisper'): void {
     const generation = ++this.generation
     const root = app.getAppPath()
     const executable =
@@ -52,10 +52,15 @@ export class Backend {
     this.stopping = false
     this.process = spawn(
       command,
-      app.isPackaged ? [cache] : ['-u', join(root, 'backend/entry.py'), cache],
+      app.isPackaged ? [cache, mode] : ['-u', join(root, 'backend/entry.py'), cache, mode],
       {
         windowsHide: true,
-        env: { ...process.env, PYTHONUTF8: '1', PYTHONUNBUFFERED: '1' }
+        env: {
+          ...process.env,
+          PYTHONUTF8: '1',
+          PYTHONUNBUFFERED: '1',
+          TRANSCREVEDOR_CUDA_DIR: join(app.getPath('userData'), 'cuda')
+        }
       }
     )
     let diagnostic = ''
@@ -63,17 +68,24 @@ export class Backend {
       diagnostic = (diagnostic + data.toString()).slice(-3000)
     })
     createInterface({ input: this.process.stdout }).on('line', (line) => {
+      if (generation !== this.generation) return
+      let event: BackendEvent
       try {
-        if (generation !== this.generation) return
-        const event = JSON.parse(line) as BackendEvent
+        event = JSON.parse(line) as BackendEvent
+      } catch {
+        onEvent({ type: 'fatal', message: 'O core enviou uma mensagem JSON inválida.' })
+        return
+      }
+      try {
         if (event.type === 'response' && event.requestId) {
           const pending = this.requests.get(event.requestId)
           this.requests.delete(event.requestId)
           if (event.ok) pending?.resolve(event.result)
           else pending?.reject(new Error(event.message || 'Falha no core.'))
         } else onEvent(event)
-      } catch {
-        onEvent({ type: 'fatal', message: 'O core enviou uma mensagem inválida.' })
+      } catch (error) {
+        console.error('Falha interna ao processar evento do core:', error)
+        onEvent({ type: 'fatal', message: `Falha interna ao processar o evento ${event.type}.` })
       }
     })
     this.process.on('error', (error) => onEvent({ type: 'fatal', message: error.message }))
@@ -86,6 +98,33 @@ export class Backend {
   send(command: object): void {
     if (!this.process?.stdin.writable) throw new Error('Core indisponível. Reinicie o aplicativo.')
     this.process.stdin.write(JSON.stringify(command) + '\n')
+  }
+  async shutdown(): Promise<void> {
+    const child = this.process
+    if (!child || child.exitCode !== null) {
+      this.stop()
+      return
+    }
+    const exited = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () =>
+          reject(
+            new Error('O motor anterior não encerrou. Reinicie o aplicativo antes de trocar.')
+          ),
+        10000
+      )
+      child.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+    // stop remove listeners exit; registramos a espera após invalidar os callbacks antigos.
+    this.stopping = true
+    this.generation += 1
+    this.rejectRequests('Motor desativado.')
+    child.kill()
+    await exited
+    this.process = undefined
   }
   stop(): void {
     this.stopping = true

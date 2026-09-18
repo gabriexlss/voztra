@@ -69,7 +69,10 @@ export function TranscriptPanel({ job, onEdit, onExport }: Props): JSX.Element {
       )}
       {!!job?.segments.length && (
         <small className="editor-note">
-          Edições são salvas no histórico ao exportar. Timestamps se referem ao áudio original.
+          Edições são salvas no histórico ao exportar.{' '}
+          {job?.segments.some((s) => s.timing === 'approximate')
+            ? 'Tempos aproximados pelos blocos de áudio; revise antes de usar como legenda.'
+            : 'Timestamps se referem ao áudio original.'}
         </small>
       )}
     </section>

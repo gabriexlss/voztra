@@ -41,6 +41,9 @@ class Engine:
         if device_id != "cpu" and not device_id.startswith("cuda:"):
             raise ValueError("Dispositivo inválido.")
         device = "cuda" if device_id.startswith("cuda:") else "cpu"
+        if device == "cuda":
+            from .cuda_runtime import verify
+            verify()
         index = int(device_id.split(":")[1]) if device == "cuda" else 0
         supported = ct.get_supported_compute_types(device, index)
         compute = options["computeType"]

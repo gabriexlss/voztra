@@ -3,6 +3,7 @@ import { LoaderCircle, Play, Square } from 'lucide-react'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
 import type { BackendEvent, Job } from '../../../shared/types'
+import { isLive } from '../../../shared/engines'
 
 /** Formata duração sem transformar minutos longos em horários do relógio. */
 function duration(seconds: number): string {
@@ -49,6 +50,7 @@ export function TranscriptionProgress({
   const elapsed = running ? Math.max(clock, data?.elapsed ?? 0) : (data?.elapsed ?? 0)
   const processed = data?.processed ?? 0
   const total = data?.duration ?? 0
+  const live = isLive(job?.engine?.protocol)
   return (
     <section
       className={`panel progress-panel transcription-progress ${running ? 'is-working' : ''}`}
@@ -84,16 +86,21 @@ export function TranscriptionProgress({
           {percent != null ? `${Math.floor(percent)}%` : running ? '…' : '0%'}
         </strong>
         <span>
-          {total > 0
-            ? `${duration(processed)} de ${duration(total)} processados`
-            : data
-              ? `${duration(processed)} processados · duração total indisponível`
-              : running
-                ? 'Preparando áudio e aguardando os primeiros trechos'
-                : 'Progresso do áudio'}
+          {live && data
+            ? `${duration(processed)} enviados ao provedor`
+            : total > 0
+              ? `${duration(processed)} de ${duration(total)} processados`
+              : data
+                ? `${duration(processed)} processados · duração total indisponível`
+                : running
+                  ? 'Preparando áudio e aguardando os primeiros trechos'
+                  : 'Progresso do áudio'}
         </span>
       </div>
-      <Progress aria-label="Áudio processado" value={percent ?? (running ? null : 0)} />
+      <Progress
+        aria-label={live ? 'Sessão Live' : 'Áudio processado'}
+        value={percent ?? (running ? null : 0)}
+      />
       <div className="transcription-stats">
         <div>
           <span>Tempo decorrido</span>
@@ -117,9 +124,11 @@ export function TranscriptionProgress({
       <small className="progress-explanation">
         {cancelling
           ? 'Os trechos concluídos serão preservados.'
-          : running
-            ? 'A porcentagem avança ao concluir trechos. O indicador gira enquanto o motor processa.'
-            : 'A porcentagem representa o áudio processado; o tempo restante é uma estimativa.'}
+          : live
+            ? 'Live mostra a posição enviada e aguarda os trechos finais. O provedor não informa porcentagem de processamento.'
+            : running
+              ? 'A porcentagem avança ao concluir trechos. O indicador gira enquanto o motor processa.'
+              : 'A porcentagem representa o áudio processado; o tempo restante é uma estimativa.'}
       </small>
     </section>
   )
