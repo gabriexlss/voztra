@@ -61,6 +61,10 @@ def transcribe_live(command, cancel, publish):
     profile = command["profile"]
     validate(profile)
     gemini = profile["protocol"] == "gemini-live"
+    if gemini and instructions(profile) and profile.get("instructionMode") != "system":
+        raise ValueError(
+            "Gemini Live: escolha sem instruções para transcrição dedicada ou sistema para modelos compatíveis."
+        )
     key = profile.get("apiKey")
     headers = (
         ({"x-goog-api-key": key} if gemini else {"Authorization": "Bearer " + key})

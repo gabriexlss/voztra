@@ -5,13 +5,15 @@
 O seletor ao lado de CPU/RAM oferece troca rápida. A aba **Motores** concentra a
 configuração completa. Somente um processo Python de motor fica ativo. Trocar
 encerra o processo anterior antes de iniciar outro; Whisper volta descarregado.
-Nenhuma troca é permitida com transcrição, lote ou operação em andamento.
+Nenhuma troca é permitida com transcrição, lote ou operação mutável em andamento.
+Uma consulta auxiliar ao catálogo pode ser encerrada ao trocar de motor.
 Servidores externos, inclusive localhost, permanecem sob controle do usuário.
 
 ## Configurar uma API
 
-Crie uma conexão com nome, URL base, chave opcional e protocolo. Salve e ative a
-conexão; consulte modelos ou digite o identificador. A listagem não filtra modelos
+Crie uma conexão com nome, URL base, chave opcional e protocolo. Clique em
+**Continuar em Modelos** e confirme a troca; consulte modelos ou digite o
+identificador. Salvar a conexão é opcional, inclusive para testar ou transcrever. A listagem não filtra modelos
 por nome/modalidade. **Testar com áudio** envia a amostra sintética do Voztra e
 exibe o resultado ou erro. Pode haver cobrança; o teste nunca é automático.
 
@@ -134,3 +136,14 @@ Fontes: [Gemini Transcribe](https://ai.google.dev/gemini-api/docs/transcribe),
 [OpenAI Realtime](https://developers.openai.com/api/docs/guides/realtime-transcription),
 [faster-whisper GPU](https://github.com/SYSTRAN/faster-whisper#gpu),
 [NVIDIA CUDA](https://docs.nvidia.com/cuda/eula/index.html).
+
+## Mudanças da 1.5
+
+Manutenção NVIDIA fica na aba **GPU**, em processo separado. Nova conexão, edição
+e confirmações usam modais da interface. Para Gemini Transcribe, use Interactions
+e **Sem instruções**; os prompts são preservados, mas não enviados. O envio de
+instruções de sistema é explícito e depende do suporte do modelo.
+
+Gemini 3.5 Transcribe e Whisper CPU foram testados com áudio real. OpenAI e Live
+têm testes simulados; inferência NVIDIA, OpenAI e Live ainda não foram validados
+em uso real nesta versão. A instalação e a remoção das DLLs NVIDIA foram testadas.

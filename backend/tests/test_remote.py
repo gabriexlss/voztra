@@ -1,9 +1,12 @@
 """Contratos reais de rede contra servidores locais, sem chaves e sem cobrança."""
 
 import json
+import queue
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,7 +16,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from transcrevedor.engines.common import merge
-from transcrevedor.engines.http import list_models, transcribe
+from transcrevedor.engines.http import interaction_text, list_models, transcribe
 from transcrevedor.engines.remote import RemoteEngine
 
 
@@ -64,7 +67,17 @@ class Handler(BaseHTTPRequestHandler):
                 {"candidates": [{"content": {"parts": [{"text": "Frase de teste."}]}}]}
             )
         elif self.path.endswith("/interactions"):
-            self.reply({"outputs": [{"type": "text", "text": "Frase de teste."}]})
+            self.reply(
+                {
+                    "status": "completed",
+                    "steps": [
+                        {
+                            "type": "model_output",
+                            "content": [{"type": "text", "text": "Frase de teste."}],
+                        }
+                    ],
+                }
+            )
 
 
 class RemoteTests(unittest.TestCase):
@@ -89,6 +102,7 @@ class RemoteTests(unittest.TestCase):
             "model": "unlisted-model",
             "basePrompt": "Transcreva.",
             "instructions": "Vocabulário.",
+            "instructionMode": "user",
             "advanced": {},
             "temperature": None,
             "chunkSeconds": 5,
@@ -117,6 +131,117 @@ class RemoteTests(unittest.TestCase):
                 self.assertEqual(text, "Frase de teste.")
                 self.assertIn(b"custom_option", Handler.received[-1][1])
                 self.assertIn(b"0.7", Handler.received[-1][1])
+
+    def test_gemini_instruction_modes_preserve_text_without_automatic_system(self):
+        p = self.profile("gemini-content")
+        transcribe(p, b"wave")
+        body = json.loads(Handler.received[-1][1])
+        self.assertNotIn("systemInstruction", body)
+        self.assertIn("Vocabulário", body["contents"][0]["parts"][0]["text"])
+        p["instructionMode"] = "system"
+        transcribe(p, b"wave")
+        self.assertIn("systemInstruction", json.loads(Handler.received[-1][1]))
+        p["protocol"] = "gemini-interactions"
+        p["instructionMode"] = "none"
+        transcribe(p, b"wave")
+        body = json.loads(Handler.received[-1][1])
+        self.assertNotIn("system_instruction", body)
+        self.assertEqual([part["type"] for part in body["input"]], ["audio"])
+        self.assertEqual(p["instructions"], "Vocabulário.")
+
+    def test_interactions_rest_steps_and_legacy_outputs(self):
+        text = {"type": "text", "text": "Transcrição."}
+        self.assertEqual(
+            interaction_text(
+                {
+                    "steps": [
+                        {"type": "user_input", "content": [text]},
+                        {"type": "thought", "content": [text]},
+                        {"type": "model_output", "content": [text]},
+                    ]
+                }
+            ),
+            "Transcrição.",
+        )
+        self.assertEqual(interaction_text({"outputs": [text]}), "Transcrição.")
+        self.assertEqual(
+            interaction_text({"output_text": "Texto", "steps": []}), "Texto"
+        )
+        self.assertEqual(interaction_text({"steps": None}), "")
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            interaction_text({"status": "incomplete", "output_text": "Parcial"})
+
+    def test_chat_instruction_modes_are_not_silently_lost(self):
+        p = self.profile("openai-chat")
+        transcribe(p, b"wave")
+        body = json.loads(Handler.received[-1][1])
+        self.assertEqual(body["messages"][0]["role"], "user")
+        self.assertIn("Vocabulário", body["messages"][0]["content"][0]["text"])
+        p["instructionMode"] = "system"
+        transcribe(p, b"wave")
+        self.assertEqual(
+            json.loads(Handler.received[-1][1])["messages"][0]["role"], "system"
+        )
+        p["instructionMode"] = "none"
+        transcribe(p, b"wave")
+        self.assertEqual(
+            len(json.loads(Handler.received[-1][1])["messages"][0]["content"]), 1
+        )
+
+    def test_first_audio_request_in_fresh_api_process_completes(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as cache:
+            process = subprocess.Popen(
+                [sys.executable, "-u", str(root / "entry.py"), cache, "api"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            events = queue.Queue()
+            reader = threading.Thread(
+                target=lambda: [
+                    events.put(json.loads(line)) for line in process.stdout
+                ],
+                daemon=True,
+            )
+            reader.start()
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if events.get(timeout=20)["type"] == "ready":
+                        break
+                process.stdin.write(
+                    json.dumps(
+                        {
+                            "type": "api-test",
+                            "requestId": "first",
+                            "profile": {**self.profile(), "chunkSeconds": 30},
+                        }
+                    )
+                    + "\n"
+                )
+                process.stdin.flush()
+                deadline = time.monotonic() + 15
+                response = None
+                while time.monotonic() < deadline:
+                    event = events.get(timeout=max(0.1, deadline - time.monotonic()))
+                    if event["type"] == "response":
+                        response = event
+                        break
+                self.assertIsNotNone(
+                    response, "A primeira transcrição do processo não retornou."
+                )
+                self.assertTrue(response["ok"], response)
+                self.assertEqual(response["result"]["text"], "Frase de teste.")
+            finally:
+                process.kill()
+                process.wait(timeout=10)
+                reader.join(timeout=2)
+                process.stdin.close()
+                process.stdout.close()
+                process.stderr.close()
 
     def test_merge_keeps_nested_session_options(self):
         original = {

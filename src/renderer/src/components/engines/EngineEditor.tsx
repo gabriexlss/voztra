@@ -1,18 +1,21 @@
 import { useState, type JSX } from 'react'
-import { Save, RefreshCw, FlaskConical, Trash2, LoaderCircle } from 'lucide-react'
+import { ArrowRight, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  BASE_PROMPT,
-  type EngineProfile,
-  type EngineState,
-  type RemoteModel,
-  type ApiProtocol
-} from '../../../../shared/engines'
+import { BASE_PROMPT, type EngineProfile, type ApiProtocol } from '../../../../shared/engines'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { Switch } from '../ui/switch'
 import { Choice } from '../Choice'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '../ui/dialog'
+import { AlertDialog } from 'radix-ui'
 
 const protocols: { value: ApiProtocol; label: string; description: string }[] = [
   {
@@ -28,7 +31,7 @@ const protocols: { value: ApiProtocol; label: string; description: string }[] = 
   {
     value: 'gemini-content',
     label: 'Gemini · Generate Content',
-    description: 'Áudio com instrução de sistema'
+    description: 'Áudio com instruções enviadas conforme o modo escolhido'
   },
   {
     value: 'gemini-interactions',
@@ -47,35 +50,31 @@ const protocols: { value: ApiProtocol; label: string; description: string }[] = 
   }
 ]
 
-/** O rascunho fica local até salvar. Teste e listagem usam somente a versão salva. */
+/** Editor transitório: aplica em memória e encaminha a seleção para a aba Modelos. */
 export function EngineEditor({
   initial,
-  state,
   busy,
   onSaved,
   onClose
 }: {
   initial: EngineProfile
-  state: EngineState
   busy: boolean
   onSaved: (p: EngineProfile) => void
   onClose: () => void
 }): JSX.Element {
   const [profile, setProfile] = useState(initial)
   const [key, setKey] = useState<string>()
-  const [remember, setRemember] = useState(state.secureStorage)
   const [json, setJson] = useState(JSON.stringify(initial.advanced, null, 2))
   const [unlock, setUnlock] = useState(false)
-  const [models, setModels] = useState<RemoteModel[]>([])
-  const [filter, setFilter] = useState('')
   const [pending, setPending] = useState('')
   const [result, setResult] = useState('')
-  const [saved, setSaved] = useState(JSON.stringify(initial))
+  const saved = JSON.stringify(initial)
+  const [discard, setDiscard] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const dirty =
     JSON.stringify(profile) !== saved ||
     json !== JSON.stringify(profile.advanced, null, 2) ||
     key !== undefined
-  const active = !!profile.id && profile.id === state.activeId
   const disabled = busy || !!pending
   const update = (patch: Partial<EngineProfile>): void => setProfile((p) => ({ ...p, ...patch }))
   const run = async (name: string, action: () => Promise<void>): Promise<void> => {
@@ -90,345 +89,305 @@ export function EngineEditor({
     }
   }
   return (
-    <section className="panel space-y-5" aria-label="Configurar conexão">
-      <div className="flex justify-between items-center gap-3">
-        <h2 className="font-semibold">{profile.id ? 'Configurar conexão' : 'Nova conexão'}</h2>
-        <Button variant="ghost" onClick={onClose}>
-          Fechar editor
-        </Button>
-      </div>
-      <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
-        <div className="grid grid-cols-2 gap-4">
-          <label className="space-y-2 text-sm">
-            Nome da conexão
-            <Input value={profile.name} onChange={(e) => update({ name: e.target.value })} />
-          </label>
-          <Choice
-            label="Provedor"
-            value={profile.provider}
-            onChange={(value) =>
-              update({
-                provider: value as EngineProfile['provider'],
-                baseUrl:
-                  value === 'gemini'
-                    ? 'https://generativelanguage.googleapis.com/v1beta'
-                    : value === 'openai'
-                      ? 'https://api.openai.com/v1'
-                      : 'http://localhost:8000/v1',
-                liveUrl: '',
-                protocol: value === 'gemini' ? 'gemini-content' : 'openai-transcription'
-              })
-            }
-            items={[
-              { value: 'openai', label: 'OpenAI' },
-              { value: 'gemini', label: 'Google Gemini' },
-              { value: 'custom', label: 'Servidor personalizado / local' }
-            ]}
-          />
-        </div>
-        <Choice
-          label="Protocolo de áudio"
-          value={profile.protocol}
-          items={protocols}
-          onChange={(v) =>
-            update({
-              protocol: v as ApiProtocol,
-              basePrompt: v === 'gemini-live' || v === 'gemini-interactions' ? '' : BASE_PROMPT
-            })
+    <>
+      <Dialog
+        open={!discard && !pending}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (dirty) setDiscard(true)
+            else onClose()
           }
-        />
-        <label className="block space-y-2 text-sm">
-          URL base HTTP
-          <Input value={profile.baseUrl} onChange={(e) => update({ baseUrl: e.target.value })} />
-        </label>
-        {profile.protocol.endsWith('live') && (
-          <label className="block space-y-2 text-sm">
-            URL WebSocket personalizada (opcional)
-            <Input
-              value={profile.liveUrl}
-              placeholder="Vazia: derivar da URL base"
-              onChange={(e) => update({ liveUrl: e.target.value })}
-            />
-          </label>
-        )}
-        <label className="block space-y-2 text-sm">
-          Chave de API
-          <Input
-            type="password"
-            autoComplete="off"
-            value={key ?? ''}
-            placeholder={
-              initial.hasKey
-                ? 'Chave já configurada; deixe intacto para manter'
-                : 'Opcional em servidores sem autenticação'
-            }
-            onChange={(e) => setKey(e.target.value)}
-          />
-        </label>
-        <label className="flex gap-3 items-center text-sm">
-          <Switch
-            checked={remember}
-            disabled={!state.secureStorage}
-            onCheckedChange={setRemember}
-          />
-          Salvar nova chave no cofre do sistema
-        </label>
-        <p className="help">
-          {state.secureStorage
-            ? 'A chave não entra no histórico nem nas exportações.'
-            : 'Cofre indisponível: a chave será mantida somente nesta sessão.'}{' '}
-          Para remover uma chave salva, preencha e depois apague o campo antes de salvar.
-        </p>
-        <div className="border-t pt-5 space-y-3">
-          <label className="block space-y-2 text-sm">
-            Identificador do modelo
-            <Input
-              value={profile.model}
-              onChange={(e) => update({ model: e.target.value })}
-              placeholder="Selecione na consulta ou informe manualmente"
-            />
-          </label>
-          <Button
-            variant="outline"
-            disabled={!active || dirty}
-            onClick={() =>
-              run('models', async () => {
-                setModels(await window.api.engineModels(profile.id))
-                setResult('Modelos consultados. Nenhum filtro de compatibilidade aplicado.')
-              })
-            }
-          >
-            <RefreshCw />
-            Consultar modelos
-          </Button>
-          {!!models.length && (
-            <>
-              <Input
-                aria-label="Buscar modelos"
-                placeholder="Buscar por nome ou descrição"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
-              <div
-                className="max-h-64 overflow-auto rounded-lg border"
-                role="list"
-                aria-label="Modelos do provedor"
-              >
-                {models
-                  .filter((m) =>
-                    (m.id + ' ' + m.description + ' ' + m.name)
-                      .toLowerCase()
-                      .includes(filter.toLowerCase())
-                  )
-                  .map((m) => (
-                    <button
-                      type="button"
-                      role="listitem"
-                      key={m.id}
-                      className="block w-full p-3 text-left hover:bg-accent border-b last:border-0"
-                      onClick={() => update({ model: m.id })}
-                    >
-                      <span className="block text-sm font-medium">{m.name}</span>
-                      <span className="help block break-all">{m.id}</span>
-                      {m.description && <span className="help block mt-1">{m.description}</span>}
-                    </button>
-                  ))}
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{profile.id ? 'Configurar conexão' : 'Nova conexão'}</DialogTitle>
+            <DialogDescription>
+              Configure o provedor. Você poderá escolher e testar o modelo antes de salvar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto min-h-0 pr-2">
+            <fieldset disabled={disabled} className="space-y-5 disabled:opacity-60">
+              <div className="grid grid-cols-2 gap-4">
+                <label className="space-y-2 text-sm">
+                  Nome da conexão
+                  <Input value={profile.name} onChange={(e) => update({ name: e.target.value })} />
+                </label>
+                <Choice
+                  label="Provedor"
+                  value={profile.provider}
+                  onChange={(value) => {
+                    setKey('')
+                    update({
+                      provider: value as EngineProfile['provider'],
+                      baseUrl:
+                        value === 'gemini'
+                          ? 'https://generativelanguage.googleapis.com/v1beta'
+                          : value === 'openai'
+                            ? 'https://api.openai.com/v1'
+                            : 'http://localhost:8000/v1',
+                      liveUrl: '',
+                      protocol: value === 'gemini' ? 'gemini-interactions' : 'openai-transcription',
+                      instructionMode: value === 'gemini' ? 'none' : 'user',
+                      model: ''
+                    })
+                  }}
+                  items={[
+                    { value: 'openai', label: 'OpenAI' },
+                    { value: 'gemini', label: 'Google Gemini' },
+                    { value: 'custom', label: 'Servidor personalizado / local' }
+                  ]}
+                />
               </div>
-            </>
-          )}
-          <p className="help">
-            Todos os modelos ficam disponíveis. O teste é opcional e verifica esta configuração com
-            um áudio sintético curto.
-          </p>
-        </div>
-        <label className="block space-y-2 text-sm">
-          Instruções adicionais
-          <Textarea
-            value={profile.instructions}
-            onChange={(e) => update({ instructions: e.target.value })}
-            placeholder="Contexto, nomes próprios e vocabulário…"
-          />
-        </label>
-        <p className="help">
-          Transcritores dedicados podem aceitar apenas contexto ou vocabulário, sem system prompt.
-          No Gemini Transcribe, configure custom_vocabulary no JSON quando necessário. O provedor
-          informa parâmetros incompatíveis.
-        </p>
-        <details className="rounded-lg border p-4 space-y-4">
-          <summary className="cursor-pointer text-sm font-medium">Configurações avançadas</summary>
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <label className="text-sm space-y-2">
-              Temperatura
-              <Input
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="Padrão do provedor"
-                value={profile.temperature ?? ''}
-                onChange={(e) =>
-                  update({ temperature: e.target.value === '' ? null : Number(e.target.value) })
+              <Choice
+                label="Protocolo de áudio"
+                value={profile.protocol}
+                items={protocols}
+                onChange={(v) =>
+                  update({
+                    protocol: v as ApiProtocol,
+                    instructionMode:
+                      v === 'gemini-live' || v === 'gemini-interactions' ? 'none' : 'user'
+                  })
                 }
               />
-            </label>
-            <label className="text-sm space-y-2">
-              Bloco de arquivo REST (segundos)
-              <Input
-                type="number"
-                min="5"
-                max="300"
-                value={profile.chunkSeconds}
-                onChange={(e) => update({ chunkSeconds: Number(e.target.value) })}
+              <label className="block space-y-2 text-sm">
+                URL base HTTP
+                <Input
+                  value={profile.baseUrl}
+                  onChange={(e) => update({ baseUrl: e.target.value })}
+                />
+              </label>
+              {profile.protocol.endsWith('live') && (
+                <label className="block space-y-2 text-sm">
+                  URL WebSocket personalizada (opcional)
+                  <Input
+                    value={profile.liveUrl}
+                    placeholder="Vazia: derivar da URL base"
+                    onChange={(e) => update({ liveUrl: e.target.value })}
+                  />
+                </label>
+              )}
+              <label className="block space-y-2 text-sm">
+                Chave de API
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  value={key ?? ''}
+                  placeholder={
+                    initial.hasKey
+                      ? 'Chave já configurada; deixe intacto para manter'
+                      : 'Opcional em servidores sem autenticação'
+                  }
+                  onChange={(e) => setKey(e.target.value)}
+                />
+              </label>
+              <p className="help">
+                A chave será usada somente em memória até você escolher salvar na aba Modelos.
+              </p>
+              <Choice
+                label="Envio de instruções"
+                value={profile.instructionMode || 'user'}
+                onChange={(v) => update({ instructionMode: v as EngineProfile['instructionMode'] })}
+                items={[
+                  {
+                    value: 'none',
+                    label: 'Sem instruções',
+                    description:
+                      'Recomendado para Gemini Transcribe dedicado. Textos ficam preservados, mas não são enviados.'
+                  },
+                  {
+                    value: 'user',
+                    label: 'Texto do usuário / contexto',
+                    description:
+                      'Texto junto ao áudio em APIs multimodais; prompt de contexto na transcrição OpenAI.'
+                  },
+                  {
+                    value: 'system',
+                    label: 'Instrução de sistema',
+                    description: 'Somente para protocolos e modelos que aceitam esse campo.'
+                  }
+                ]}
               />
-            </label>
+              <label className="block space-y-2 text-sm">
+                Instruções adicionais
+                <Textarea
+                  value={profile.instructions}
+                  onChange={(e) => update({ instructions: e.target.value })}
+                  placeholder="Contexto, nomes próprios e vocabulário…"
+                />
+              </label>
+              <p className="help">
+                Transcritores dedicados podem aceitar apenas contexto ou vocabulário, sem system
+                prompt. No Gemini Transcribe, configure custom_vocabulary no JSON quando necessário.
+                O provedor informa parâmetros incompatíveis.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAdvancedOpen(!advancedOpen)}
+              >
+                {advancedOpen ? 'Voltar aos dados da conexão' : 'Editar opções avançadas'}
+              </Button>
+              {advancedOpen && (
+                <div className="rounded-lg border p-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <label className="text-sm space-y-2">
+                      Temperatura
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="Padrão do provedor"
+                        value={profile.temperature ?? ''}
+                        onChange={(e) =>
+                          update({
+                            temperature: e.target.value === '' ? null : Number(e.target.value)
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="text-sm space-y-2">
+                      Bloco de arquivo REST (segundos)
+                      <Input
+                        type="number"
+                        min="5"
+                        max="300"
+                        value={profile.chunkSeconds}
+                        onChange={(e) => update({ chunkSeconds: Number(e.target.value) })}
+                      />
+                    </label>
+                  </div>
+                  <p className="help">
+                    Blocos menores reduzem memória e limites por envio, mas podem cortar contexto
+                    entre frases. Live gerencia sessões separadamente.
+                  </p>
+                  <label className="flex gap-3 text-sm items-center">
+                    <Switch checked={unlock} onCheckedChange={setUnlock} />
+                    Editar instruções base
+                  </label>
+                  <Textarea
+                    aria-label="Instruções base"
+                    readOnly={!unlock}
+                    value={profile.basePrompt}
+                    onChange={(e) => update({ basePrompt: e.target.value })}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!unlock}
+                    onClick={() =>
+                      update({
+                        basePrompt:
+                          profile.protocol === 'gemini-live' ||
+                          profile.protocol === 'gemini-interactions'
+                            ? ''
+                            : BASE_PROMPT
+                      })
+                    }
+                  >
+                    Restaurar instruções padrão
+                  </Button>
+                  <label className="block space-y-2 text-sm">
+                    Parâmetros JSON
+                    <Textarea
+                      aria-label="Parâmetros JSON"
+                      className="font-mono min-h-40"
+                      value={json}
+                      onChange={(e) => setJson(e.target.value)}
+                      spellCheck={false}
+                    />
+                  </label>
+                  <p className="help">
+                    {profile.protocol.endsWith('live')
+                      ? 'Objeto de configuração da sessão (sem o envelope setup/session).'
+                      : 'Parâmetros do corpo da requisição; objetos aninhados são preservados.'}{' '}
+                    Os valores JSON prevalecem sobre controles equivalentes. Credenciais, modelo,
+                    URL e conteúdo de áudio têm campos próprios. Não há correção automática de
+                    parâmetros rejeitados.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      try {
+                        setJson(JSON.stringify(JSON.parse(json), null, 2))
+                      } catch {
+                        toast.error('JSON inválido.')
+                      }
+                    }}
+                  >
+                    Formatar JSON
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setJson('{}')}>
+                    Restaurar JSON
+                  </Button>
+                  <details>
+                    <summary className="text-sm cursor-pointer">Prévia das instruções</summary>
+                    <pre className="text-xs whitespace-pre-wrap rounded-lg bg-muted p-3 mt-2">
+                      {[profile.basePrompt, profile.instructions].filter(Boolean).join('\n\n') ||
+                        'Sem instruções textuais.'}
+                    </pre>
+                  </details>
+                </div>
+              )}
+            </fieldset>
           </div>
-          <p className="help">
-            Blocos menores reduzem memória e limites por envio, mas podem cortar contexto entre
-            frases. Live gerencia sessões separadamente.
-          </p>
-          <label className="flex gap-3 text-sm items-center">
-            <Switch checked={unlock} onCheckedChange={setUnlock} />
-            Editar instruções base
-          </label>
-          <Textarea
-            aria-label="Instruções base"
-            readOnly={!unlock}
-            value={profile.basePrompt}
-            onChange={(e) => update({ basePrompt: e.target.value })}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!unlock}
-            onClick={() =>
-              update({
-                basePrompt:
-                  profile.protocol === 'gemini-live' || profile.protocol === 'gemini-interactions'
-                    ? ''
-                    : BASE_PROMPT
-              })
-            }
-          >
-            Restaurar instruções padrão
-          </Button>
-          <label className="block space-y-2 text-sm">
-            Parâmetros JSON
-            <Textarea
-              aria-label="Parâmetros JSON"
-              className="font-mono min-h-40"
-              value={json}
-              onChange={(e) => setJson(e.target.value)}
-              spellCheck={false}
-            />
-          </label>
-          <p className="help">
-            {profile.protocol.endsWith('live')
-              ? 'Objeto de configuração da sessão (sem o envelope setup/session).'
-              : 'Parâmetros do corpo da requisição; objetos aninhados são preservados.'}{' '}
-            Os valores JSON prevalecem sobre controles equivalentes. Credenciais, modelo, URL e
-            conteúdo de áudio têm campos próprios. Não há correção automática de parâmetros
-            rejeitados.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              try {
-                setJson(JSON.stringify(JSON.parse(json), null, 2))
-              } catch {
-                toast.error('JSON inválido.')
+          <DialogFooter>
+            <Button variant="outline" onClick={() => (dirty ? setDiscard(true) : onClose())}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={disabled}
+              onClick={() =>
+                run('apply', async () => {
+                  const applied = await window.api.applyEngine(
+                    { ...profile, advanced: JSON.parse(json) },
+                    key
+                  )
+                  if (applied) {
+                    setKey(undefined)
+                    onSaved(applied)
+                  }
+                })
               }
-            }}
-          >
-            Formatar JSON
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setJson('{}')}>
-            Restaurar JSON
-          </Button>
-          <details>
-            <summary className="text-sm cursor-pointer">Prévia das instruções</summary>
-            <pre className="text-xs whitespace-pre-wrap rounded-lg bg-muted p-3 mt-2">
-              {[profile.basePrompt, profile.instructions].filter(Boolean).join('\n\n') ||
-                'Sem instruções textuais.'}
-            </pre>
-          </details>
-        </details>
-      </fieldset>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          disabled={disabled}
-          onClick={() =>
-            run('save', async () => {
-              const extra = JSON.parse(json)
-              const p = await window.api.saveEngine({ ...profile, advanced: extra }, key, remember)
-              setProfile(p)
-              setJson(JSON.stringify(p.advanced, null, 2))
-              setSaved(JSON.stringify(p))
-              setKey(undefined)
-              onSaved(p)
-              toast.success('Conexão salva')
-            })
-          }
-        >
-          <Save />
-          Salvar conexão
-        </Button>
-        <Button
-          variant="outline"
-          disabled={disabled || !profile.id || dirty || active}
-          onClick={() => run('switch', () => window.api.switchEngine(profile.id))}
-        >
-          Usar este motor
-        </Button>
-        <Button
-          variant="outline"
-          disabled={disabled || !active || dirty || !profile.model}
-          onClick={() =>
-            run('test', async () => {
-              const test = await window.api.testEngine(profile.id)
-              setResult(
-                `Teste concluído · ${test.elapsed.toFixed(1)} s · ${test.model}\n${test.text}${test.usage ? '\nConsumo informado: ' + JSON.stringify(test.usage) : ''}`
-              )
-            })
-          }
-        >
-          <FlaskConical />
-          Testar com áudio
-        </Button>
-        {!!profile.id && (
-          <Button
-            variant="ghost"
-            disabled={disabled || active}
-            onClick={() =>
-              run('delete', async () => {
-                await window.api.deleteEngine(profile.id)
-                onClose()
-              })
-            }
-          >
-            <Trash2 />
-            Excluir conexão
-          </Button>
-        )}
-      </div>
-      <p className="help">
-        Salve e ative a conexão para consultar modelos ou testar. O teste envia nossa amostra ao
-        endereço configurado e pode gerar cobrança.{' '}
-        {dirty && 'Configuração alterada; salve antes de testar.'}
-      </p>
+            >
+              <ArrowRight />
+              Continuar em Modelos
+            </Button>
+          </DialogFooter>
+          {result && (
+            <p role="alert" className="text-sm text-destructive break-words">
+              {result}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog.Root open={discard} onOpenChange={setDiscard}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+          <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-6 space-y-4">
+            <AlertDialog.Title className="font-semibold">Descartar alterações?</AlertDialog.Title>
+            <AlertDialog.Description className="help">
+              As alterações deste formulário ainda não foram aplicadas.
+            </AlertDialog.Description>
+            <div className="flex justify-end gap-2">
+              <AlertDialog.Cancel asChild>
+                <Button variant="outline">Continuar editando</Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <Button onClick={onClose}>Descartar</Button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
       {pending && (
-        <p role="status" className="flex gap-2 items-center text-sm">
+        <p role="status" className="flex items-center gap-2 text-sm">
           <LoaderCircle className="size-4 animate-spin" />
-          Aguardando operação…
+          Aplicando configuração…
         </p>
       )}
-      {result && (
-        <pre
-          role="status"
-          className="rounded-lg bg-muted p-4 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto"
-        >
-          {result}
-        </pre>
-      )}
-    </section>
+    </>
   )
 }

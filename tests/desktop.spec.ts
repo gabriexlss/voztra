@@ -409,6 +409,10 @@ test('download explícito sem áudio, carga, exclusão e bloqueio sem modelo', a
     })
     await page.getByRole('button', { name: 'Modelos', exact: true }).click()
     await tiny.getByRole('button', { name: 'Excluir', exact: true }).click()
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Excluir modelo', exact: true })
+      .click()
     await expect(tiny.getByText('Não instalado', { exact: true })).toBeVisible({ timeout: 30000 })
     expect(await page.evaluate(async () => (await window.api.snapshot()).modelState)).toBe(
       'unloaded'

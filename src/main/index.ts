@@ -1,3 +1,4 @@
+import { confirmations } from './confirmation'
 import { createModelHandler } from './model-manager'
 import { dataDirectory, ensureWritable } from './data-paths'
 import { UpdateManager } from './updater'
@@ -35,7 +36,10 @@ app.on('second-instance', () => {
 if (process.env.VOZTRA_DISABLE_GPU === '1') app.disableHardwareAcceleration()
 const backend = new Backend()
 let updates: UpdateManager
+let gpu: ReturnType<typeof cudaManager>
 let window: BrowserWindow | null = null
+const confirmation = confirmations(() => window)
+let closeApproved = false
 let store: JobStore
 let profiles: EngineProfiles
 let active: string | undefined
@@ -63,9 +67,10 @@ function saveObservations(): void {
   // A troca atômica preserva a última medição íntegra se o processo for interrompido.
   writeAtomic(observationsPath, JSON.stringify(state.observations))
 }
-function resetCore(): void {
-  backend.stop()
+async function resetCore(): Promise<void> {
   state.ready = false
+  publish()
+  await backend.shutdown()
   state.modelState = 'unloaded'
   state.loaded = undefined
   saveObservations()
@@ -211,17 +216,21 @@ function createWindow(): void {
   if (is.dev && process.env.ELECTRON_RENDERER_URL) window.loadURL(process.env.ELECTRON_RENDERER_URL)
   else window.loadFile(join(__dirname, '../renderer/index.html'))
   window.on('close', (event) => {
-    if (
-      active &&
-      dialog.showMessageBoxSync(window!, {
-        type: 'question',
-        buttons: ['Continuar transcrevendo', 'Encerrar'],
-        defaultId: 0,
-        cancelId: 0,
-        message: 'Encerrar a transcrição? Os segmentos concluídos já foram salvos.'
-      }) === 0
-    )
-      event.preventDefault()
+    if (closeApproved || (!active && !state.operation)) return
+    event.preventDefault()
+    void confirmation
+      .ask({
+        title: 'Encerrar a operação?',
+        description:
+          'Os segmentos concluídos já foram salvos. A operação em andamento será interrompida.',
+        action: 'Encerrar'
+      })
+      .then((accepted) => {
+        if (accepted) {
+          closeApproved = true
+          window?.close()
+        }
+      })
   })
 }
 
@@ -298,6 +307,7 @@ app.whenReady().then(() => {
       throw new Error('Fonte inválida.')
     await shell.openExternal(url.href)
   })
+  handle('confirmation-answer', confirmation.answer)
   handle('snapshot', () => state)
   state.engines = profiles.snapshot()
   const engineBusy = (): boolean => !!active || store.jobs.some((j) => j.status === 'queued')
@@ -308,21 +318,63 @@ app.whenReady().then(() => {
     busy: engineBusy,
     publish,
     receive,
-    window: () => window!
+    ask: confirmation.ask
   })
   handle('engine-switch', (id) => engines.switchTo(String(id)))
-  handle(
-    'cuda-action',
-    cudaManager({ backend, state, busy: engineBusy, publish, receive, window: () => window! })
-  )
+  handle('engine-apply', async (input, key) => {
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    const draft = profiles.save(input, key, false, true)
+    if (profiles.activeId !== draft.id) {
+      try {
+        if (!(await engines.switchTo(draft.id))) {
+          profiles.discard(draft.id)
+          publish()
+          return
+        }
+      } catch (error) {
+        if (profiles.activeId !== draft.id) profiles.discard(draft.id)
+        publish()
+        throw error
+      }
+    }
+    publish()
+    return draft
+  })
+  handle('engine-discard', async (id) => {
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    if (
+      !(await confirmation.ask({
+        title: 'Descartar configuração temporária?',
+        description: 'As alterações não salvas serão removidas da memória.',
+        action: 'Descartar'
+      }))
+    )
+      return
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    if (profiles.activeId === String(id) && !(await engines.switchTo('whisper'))) return
+    profiles.discard(String(id))
+    publish()
+  })
+  gpu = cudaManager({ backend, state, busy: engineBusy, publish, receive, ask: confirmation.ask })
+  handle('cuda-action', gpu.action)
   handle('engine-save', (profile, key, remember) => {
     if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
     const result = profiles.save(profile, key, remember)
     publish()
     return result
   })
-  handle('engine-delete', (id) => {
+  handle('engine-delete', async (id) => {
     if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    if (
+      !(await confirmation.ask({
+        title: 'Excluir conexão?',
+        description: 'O perfil e sua credencial serão removidos. O histórico será preservado.',
+        action: 'Excluir'
+      }))
+    )
+      return
+    if (engineBusy() || state.operation) throw new Error('Aguarde a operação atual.')
+    if (profiles.activeId === String(id) && !(await engines.switchTo('whisper'))) return
     profiles.delete(String(id))
     publish()
   })
@@ -343,7 +395,7 @@ app.whenReady().then(() => {
       state,
       backend,
       isTranscribing: () => profiles.activeId !== 'whisper' || engineBusy(),
-      getWindow: () => window!,
+      ask: confirmation.ask,
       resetCore,
       publish,
       saveObservations
@@ -404,7 +456,7 @@ app.whenReady().then(() => {
       (!profile && (!state.loaded || state.modelState !== 'loaded'))
     )
       throw new Error('Não é possível iniciar esta transcrição.')
-    if (profile && !profile.model.trim()) throw new Error('Informe um modelo na aba Motores.')
+    if (profile && !profile.model.trim()) throw new Error('Informe um modelo na aba Modelos.')
     if (
       !profile &&
       (!device ||
@@ -503,6 +555,11 @@ app.whenReady().then(() => {
     return state
   })
   handle('cancel', () => {
+    if (state.operation === 'cuda-install') {
+      gpu.cancel()
+      return
+    }
+    if (state.operation === 'cuda-remove' || state.operation === 'switch-engine') return
     if (!active && !state.operation) return
     // O cancelamento inclui os arquivos ainda não iniciados da solicitação.
     store.jobs
@@ -522,7 +579,7 @@ app.whenReady().then(() => {
       state.operation = undefined
       state.operationId = undefined
       state.operationModel = undefined
-      resetCore()
+      void resetCore().catch((error) => receive({ type: 'fatal', message: String(error) }))
       receive({
         type: 'restarting',
         message:
@@ -569,8 +626,9 @@ app.whenReady().then(() => {
   backend.start(receive, profiles.activeId === 'whisper' ? 'whisper' : 'api')
 })
 app.on('window-all-closed', () => app.quit())
-app.on('before-quit', () => {
+app.on('will-quit', () => {
   updates?.stop()
+  gpu?.stop()
   if (observationsPath) saveObservations()
   backend.stop()
 })

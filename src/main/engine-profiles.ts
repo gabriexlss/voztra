@@ -1,5 +1,5 @@
 import { safeStorage } from 'electron'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, copyFileSync } from 'node:fs'
 import { writeAtomic } from './atomic-file'
 import { randomUUID } from 'node:crypto'
 import type { EngineProfile, EngineState } from '../shared/engines'
@@ -7,14 +7,27 @@ import type { EngineProfile, EngineState } from '../shared/engines'
 /** Arquivo atômico, chaves cifradas pelo SO e fallback explícito apenas em memória. */
 export class EngineProfiles {
   private records: { profile: EngineProfile; encrypted?: string }[] = []
+  private drafts = new Map<string, { profile: EngineProfile; apiKey: string }>()
   private sessionKeys = new Map<string, string>()
   activeId = 'whisper'
   constructor(private path: string) {
     if (existsSync(path)) {
       const data = JSON.parse(readFileSync(path, 'utf8'))
-      if (data.version !== 1 || !Array.isArray(data.records))
+      if (![1, 2].includes(data.version) || !Array.isArray(data.records))
         throw new Error('Perfis de motores inválidos; arquivo preservado.')
-      this.records = data.records
+      this.records = data.records.map((record: { profile: EngineProfile; encrypted?: string }) => ({
+        ...record,
+        profile: {
+          ...record.profile,
+          instructionMode:
+            record.profile.instructionMode ||
+            (['gemini-interactions', 'gemini-live'].includes(record.profile.protocol)
+              ? 'none'
+              : 'user')
+        }
+      }))
+      if (data.version === 1 && !existsSync(path + '.v1.backup'))
+        copyFileSync(path, path + '.v1.backup')
       this.activeId =
         data.activeId === 'whisper' || this.records.some((r) => r.profile.id === data.activeId)
           ? data.activeId
@@ -31,18 +44,29 @@ export class EngineProfiles {
     return {
       activeId: this.activeId,
       secureStorage: this.secure(),
-      profiles: this.records.map((r) => ({
-        ...r.profile,
-        hasKey: !!r.encrypted || !!this.sessionKeys.get(r.profile.id)
-      }))
+      profiles: [
+        ...this.records.map((r) => ({
+          ...r.profile,
+          hasKey: !!r.encrypted || !!this.sessionKeys.get(r.profile.id)
+        })),
+        ...[...this.drafts.values()].map((d) => ({
+          ...d.profile,
+          temporary: true,
+          hasKey: !!d.apiKey
+        }))
+      ].filter((p, i, all) => all.findLastIndex((other) => other.id === p.id) === i)
     }
   }
   get(id = this.activeId): EngineProfile {
+    const draft = this.drafts.get(id)
+    if (draft) return structuredClone(draft.profile)
     const record = this.records.find((r) => r.profile.id === id)
     if (!record) throw new Error('Conexão não encontrada.')
     return structuredClone(record.profile)
   }
   credentials(id = this.activeId): EngineProfile & { apiKey: string } {
+    const draft = this.drafts.get(id)
+    if (draft) return { ...structuredClone(draft.profile), apiKey: draft.apiKey }
     const record = this.records.find((r) => r.profile.id === id)
     if (!record) throw new Error('Conexão não encontrada.')
     let key = this.sessionKeys.get(id) || ''
@@ -57,7 +81,7 @@ export class EngineProfiles {
     }
     return { ...this.get(id), apiKey: key }
   }
-  save(input: unknown, key: unknown, remember: unknown): EngineProfile {
+  save(input: unknown, key: unknown, remember: unknown, temporary = false): EngineProfile {
     const p = input as EngineProfile
     if (
       !p ||
@@ -132,10 +156,14 @@ export class EngineProfiles {
     if (key !== undefined && (typeof key !== 'string' || key.length > 16000))
       throw new Error('Chave inválida.')
     const id = p.id || randomUUID()
-    if (id === 'whisper' || (p.id && !this.records.some((r) => r.profile.id === p.id)))
+    if (
+      id === 'whisper' ||
+      (p.id && !this.drafts.has(p.id) && !this.records.some((r) => r.profile.id === p.id))
+    )
       throw new Error('Identificador inválido.')
     const profile: EngineProfile = {
       id,
+      revision: randomUUID(),
       name: p.name.trim(),
       provider: p.provider,
       baseUrl: url.href.replace(/\/$/, ''),
@@ -146,8 +174,19 @@ export class EngineProfiles {
       basePrompt: p.basePrompt,
       advanced: structuredClone(p.advanced),
       temperature: p.temperature,
-      chunkSeconds: p.chunkSeconds
+      chunkSeconds: p.chunkSeconds,
+      instructionMode:
+        p.instructionMode ||
+        (p.protocol === 'gemini-interactions' || p.protocol === 'gemini-live' ? 'none' : 'user')
     }
+    if (p.instructionMode && !['none', 'user', 'system'].includes(p.instructionMode))
+      throw new Error('Modo de instruções inválido.')
+    if (temporary) {
+      const apiKey = typeof key === 'string' ? key : p.id ? this.credentials(p.id).apiKey : ''
+      this.drafts.set(id, { profile, apiKey })
+      return { ...profile, temporary: true, hasKey: !!apiKey }
+    }
+    if (key === undefined && p.id) key = this.credentials(id).apiKey
     const record = this.records.find((r) => r.profile.id === id) || { profile }
     if (typeof key === 'string') {
       if (remember && key && !this.secure())
@@ -160,19 +199,32 @@ export class EngineProfiles {
     }
     record.profile = profile
     if (!this.records.includes(record)) this.records.push(record)
+    this.drafts.delete(id)
     this.persist()
     return profile
+  }
+  discard(id: string): void {
+    this.drafts.delete(id)
+    if (this.activeId === id && !this.records.some((r) => r.profile.id === id))
+      this.activeId = 'whisper'
   }
   delete(id: string): void {
     if (id === this.activeId) throw new Error('Troque de motor antes de excluir esta conexão.')
     this.records = this.records.filter((r) => r.profile.id !== id)
     this.sessionKeys.delete(id)
+    this.drafts.delete(id)
     this.persist()
   }
   persist(): void {
     writeAtomic(
       this.path,
-      JSON.stringify({ version: 1, activeId: this.activeId, records: this.records })
+      JSON.stringify({
+        version: 2,
+        activeId: this.records.some((r) => r.profile.id === this.activeId)
+          ? this.activeId
+          : 'whisper',
+        records: this.records
+      })
     )
   }
 }

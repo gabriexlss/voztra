@@ -67,6 +67,29 @@ def list_models(profile):
     )
 
 
+def interaction_text(data):
+    """REST retorna steps; output_text é também aceito para servidores compatíveis."""
+    status = data.get("status")
+    if status and status != "completed":
+        raise ValueError(f"Interação não concluída pelo provedor (status: {status}).")
+    if data.get("output_text"):
+        return data["output_text"]
+    if "steps" in data:
+        # Não incorporar entrada, raciocínio ou resultados de ferramentas ao áudio.
+        return "".join(
+            part.get("text", "")
+            for step in (data.get("steps") or [])
+            if step.get("type") == "model_output"
+            for part in (step.get("content") or [])
+            if part.get("type") == "text"
+        )
+    return "".join(
+        part.get("text", "")
+        for part in (data.get("outputs") or [])
+        if part.get("type") == "text"
+    )
+
+
 def transcribe(profile, audio):
     """Um bloco WAV pequeno cabe nos limites usuais sem enviar o arquivo inteiro à RAM."""
     base = profile["baseUrl"].rstrip("/")
@@ -98,7 +121,6 @@ def transcribe(profile, audio):
             body = {
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": prompt},
                     {
                         "role": "user",
                         "content": [
@@ -114,6 +136,13 @@ def transcribe(profile, audio):
                 ],
                 "stream": False,
             }
+            if prompt:
+                if profile.get("instructionMode") == "system":
+                    body["messages"].insert(0, {"role": "system", "content": prompt})
+                else:
+                    body["messages"][0]["content"].insert(
+                        0, {"type": "text", "text": prompt}
+                    )
             if profile.get("temperature") is not None:
                 body["temperature"] = profile["temperature"]
             data = response_json(
@@ -137,7 +166,10 @@ def transcribe(profile, audio):
                 ]
             }
             if prompt:
-                body["systemInstruction"] = {"parts": [{"text": prompt}]}
+                if profile.get("instructionMode") == "system":
+                    body["systemInstruction"] = {"parts": [{"text": prompt}]}
+                else:
+                    body["contents"][0]["parts"].insert(0, {"text": prompt})
             if profile.get("temperature") is not None:
                 body["generationConfig"] = {"temperature": profile["temperature"]}
             path = quote(model.removeprefix("models/"), safe="")
@@ -166,16 +198,18 @@ def transcribe(profile, audio):
                 "store": False,
             }
             if prompt:
-                body["system_instruction"] = prompt
+                if profile.get("instructionMode") == "system":
+                    body["system_instruction"] = prompt
+                elif profile.get("instructionMode") == "user":
+                    body["input"].insert(0, {"type": "text", "text": prompt})
+                else:
+                    raise ValueError(
+                        "Escolha como enviar as instruções: sem instruções para Transcribe, texto do usuário ou sistema para modelos compatíveis."
+                    )
             if profile.get("temperature") is not None:
                 body["generation_config"] = {"temperature": profile["temperature"]}
             data = response_json(
                 connection.post(base + "/interactions", json=merge(body, extra))
             )
-            text = data.get("output_text") or "".join(
-                p.get("text", "")
-                for p in data.get("outputs", [])
-                if p.get("type") == "text"
-            )
-            return text, data.get("usage")
+            return interaction_text(data), data.get("usage")
         raise ValueError("Protocolo HTTP desconhecido.")

@@ -4,10 +4,17 @@ import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { EngineEditor } from './EngineEditor'
 import { emptyProfile } from '../../../../shared/engines'
-import { CudaPanel } from './CudaPanel'
 import type { EngineProfile, EngineState } from '../../../../shared/engines'
 
-export function EnginesPage({ state, busy }: { state?: EngineState; busy: boolean }): JSX.Element {
+export function EnginesPage({
+  state,
+  busy,
+  onModels
+}: {
+  state?: EngineState
+  busy: boolean
+  onModels: () => void
+}): JSX.Element {
   const [editing, setEditing] = useState<EngineProfile>()
   if (!state) return <p>Carregando motores…</p>
   return (
@@ -24,7 +31,7 @@ export function EnginesPage({ state, busy }: { state?: EngineState; busy: boolea
       </div>
       <div className="grid grid-cols-1 min-[1150px]:grid-cols-2 gap-4">
         {[
-          { id: 'whisper', name: 'Whisper local', model: 'Carga manual · CPU / NVIDIA CUDA' },
+          { id: 'whisper', name: 'Whisper local', model: 'Processamento neste computador' },
           ...state.profiles
         ].map((p) => (
           <article
@@ -40,7 +47,11 @@ export function EnginesPage({ state, busy }: { state?: EngineState; busy: boolea
               <h2 className="font-semibold flex-1 truncate">{p.name}</h2>
               <span className="help">{p.id === state.activeId ? 'Ativo' : 'Desativado'}</span>
             </div>
-            <p className="help break-all mb-4">{p.model || 'Modelo ainda não escolhido'}</p>
+            {p.id === state.activeId && (
+              <p className="help break-all mb-4">
+                {p.model || 'Selecione um modelo na aba Modelos'}
+              </p>
+            )}
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -49,7 +60,12 @@ export function EnginesPage({ state, busy }: { state?: EngineState; busy: boolea
               >
                 Usar este motor
               </Button>
-              {p.id !== 'whisper' && (
+              {p.id === state.activeId && (
+                <Button variant="outline" onClick={onModels}>
+                  Abrir Modelos
+                </Button>
+              )}
+              {p.id !== 'whisper' && p.id === state.activeId && (
                 <Button
                   variant="ghost"
                   disabled={busy}
@@ -63,14 +79,15 @@ export function EnginesPage({ state, busy }: { state?: EngineState; busy: boolea
           </article>
         ))}
       </div>
-      <CudaPanel busy={busy} active={state.activeId === 'whisper'} />
       {editing && (
         <EngineEditor
           key={editing.id || 'new'}
           initial={editing}
-          state={state}
           busy={busy}
-          onSaved={setEditing}
+          onSaved={() => {
+            setEditing(undefined)
+            onModels()
+          }}
           onClose={() => setEditing(undefined)}
         />
       )}

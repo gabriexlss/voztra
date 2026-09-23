@@ -2,6 +2,16 @@
 
 As datas originais das versões legadas não foram confirmadas.
 
+## 1.5.0 — Motores isolados e conexões mais simples
+
+- Whisper, APIs e manutenção GPU em processos separados; troca encerra o motor anterior e libera seus recursos.
+- Nova conexão e edição em modais centralizados; confirmações integradas à interface shadcn.
+- Catálogo remoto na aba Modelos, atualizado a cada entrada; seleção e teste antes de salvar a conexão.
+- Correção do Gemini Transcribe: controle explícito das instruções e leitura da resposta REST Interactions.
+- Aba GPU dedicada para instalar e remover bibliotecas NVIDIA; correção de concorrência nas consultas de status.
+- Corrigido travamento na primeira transcrição API no Windows; perfis anteriores migrados preservando configurações.
+- Validado com Gemini 3.5 Transcribe real, Whisper CPU e instalação/remoção de DLLs. Live e OpenAI com testes simulados; inferência NVIDIA, Live e OpenAI ainda sem validação real nesta versão.
+
 ## 1.4.0 — Motores e provedores
 
 - Aba Motores e acesso rápido para alternar entre Whisper, Gemini, OpenAI e servidores locais ou personalizados.

@@ -1,4 +1,4 @@
-import { dialog, type BrowserWindow } from 'electron'
+import type { AskConfirmation } from '../shared/confirmation'
 import { randomUUID } from 'node:crypto'
 import type { Snapshot, Options, ModelEntry, ModelAction, BenchmarkResult } from '../shared/types'
 import type { Backend } from './backend'
@@ -6,8 +6,8 @@ interface Context {
   state: Snapshot
   backend: Backend
   isTranscribing: () => boolean
-  getWindow: () => BrowserWindow
-  resetCore: () => void
+  ask: AskConfirmation
+  resetCore: () => Promise<void>
   publish: () => void
   saveObservations: () => void
 }
@@ -16,7 +16,7 @@ export function createModelHandler({
   state,
   backend,
   isTranscribing,
-  getWindow,
+  ask,
   resetCore,
   publish,
   saveObservations
@@ -41,15 +41,12 @@ export function createModelHandler({
       throw new Error('Carregue um modelo antes de testar.')
     if (action === 'delete') {
       const entry = state.models.find((m) => m.name === name)!
-      const answer = await dialog.showMessageBox(getWindow(), {
-        type: 'question',
-        buttons: ['Cancelar', 'Excluir modelo'],
-        defaultId: 0,
-        cancelId: 0,
-        message: `Excluir ${name}?`,
-        detail: `Aproximadamente ${(entry.bytes / 1024 ** 2).toFixed(1)} MiB serão liberados. Transcrições serão preservadas.`
+      const answer = await ask({
+        action: 'Excluir modelo',
+        title: `Excluir ${name}?`,
+        description: `Aproximadamente ${(entry.bytes / 1024 ** 2).toFixed(1)} MiB serão liberados. Transcrições serão preservadas.`
       })
-      if (answer.response !== 1) return
+      if (!answer) return
       if (isTranscribing() || state.operation)
         throw new Error('O aplicativo ficou ocupado. Tente novamente.')
     }
@@ -77,7 +74,7 @@ export function createModelHandler({
       } else if (action === 'unload') {
         state.modelState = 'unloading'
         publish()
-        resetCore()
+        await resetCore()
       } else if (action === 'benchmark') {
         publish()
         const result = await backend.request<BenchmarkResult>({ type: 'benchmark' })
@@ -109,12 +106,12 @@ export function createModelHandler({
           entry.estimated = false
         }
       } else {
-        if (action === 'delete' && state.loaded?.model === name) resetCore()
+        if (action === 'delete' && state.loaded?.model === name) await resetCore()
         publish()
         state.models = await backend.request<ModelEntry[]>({ type: action, model: name })
       }
     } catch (error) {
-      if (action === 'load' && state.modelState === 'loading') resetCore()
+      if (action === 'load' && state.modelState === 'loading') await resetCore()
       if (action === 'download' && state.ready) {
         try {
           state.models = await backend.request<ModelEntry[]>({ type: 'catalog' })

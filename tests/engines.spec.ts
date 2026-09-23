@@ -1,7 +1,7 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import { createServer } from 'node:http'
 import { resolve, join } from 'node:path'
-import { readFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, mkdirSync, existsSync } from 'node:fs'
 import { emptyProfile } from '../src/shared/engines'
 
 /** Rede real em loopback: preserva CPU/Whisper e testa o caminho renderer/main/Python. */
@@ -51,17 +51,19 @@ test('motores, JSON, chave, fila e troca exclusiva com servidor local', async ()
     await page.getByRole('button', { name: 'Adicionar conexão' }).click()
     await page.getByLabel('Nome da conexão', { exact: true }).fill('Servidor de teste')
     await page.getByLabel('URL base HTTP', { exact: true }).fill(`http://127.0.0.1:${port}/v1`)
-    await page.getByLabel('Identificador do modelo', { exact: true }).fill('modelo-novo')
     await page.getByLabel('Chave de API', { exact: true }).fill('secret-e2e-session')
-    if (
-      await page.getByRole('switch', { name: 'Salvar nova chave no cofre do sistema' }).isChecked()
-    )
-      await page.getByRole('switch', { name: 'Salvar nova chave no cofre do sistema' }).click()
-    await page.getByText('Configurações avançadas', { exact: true }).click()
+    await page.getByRole('button', { name: 'Editar opções avançadas' }).click()
     await page
       .getByLabel('Parâmetros JSON', { exact: true })
       .fill('{"temperature":0.6,"custom_parameter":"ok"}')
-    await page.getByRole('button', { name: 'Salvar conexão', exact: true }).click()
+    await page.screenshot({ animations: 'disabled', path: '.cache/1.5-connection-dialog.png' })
+    await page.getByRole('button', { name: 'Continuar em Modelos' }).click()
+    await expect(page.getByRole('alertdialog')).toBeVisible()
+    await page.screenshot({ animations: 'disabled', path: '.cache/1.5-switch-dialog.png' })
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Trocar motor', exact: true })
+      .click()
     await expect
       .poll(async () =>
         page.evaluate(async () => (await window.api.snapshot()).engines?.profiles.length)
@@ -72,7 +74,6 @@ test('motores, JSON, chave, fila e troca exclusiva com servidor local', async ()
       'secret-e2e-session'
     )
     expect(JSON.stringify(profile)).not.toContain('secret-e2e-session')
-    await page.evaluate((id) => window.api.switchEngine(id), profile.id)
     await expect
       .poll(
         async () =>
@@ -86,13 +87,26 @@ test('motores, JSON, chave, fila e troca exclusiva com servidor local', async ()
     const snapshot = await page.evaluate(() => window.api.snapshot())
     expect(snapshot.loaded).toBeUndefined()
     expect(snapshot.engines?.activeId).toBe(profile.id)
-    const models = await page.evaluate((id) => window.api.engineModels(id), profile.id)
-    expect(models.map((m) => m.id)).toContain('texto-apenas')
-    const result = await page.evaluate((id) => window.api.testEngine(id), profile.id)
-    expect(result.text).toContain('Transcrição pelo servidor local.')
+    await expect(page.getByRole('heading', { name: 'Modelos do provedor' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /texto-apenas/ })).toBeVisible()
+    expect(
+      existsSync(join(directory, 'engines.json')) &&
+        readFileSync(join(directory, 'engines.json'), 'utf8').includes('Servidor de teste')
+    ).toBe(false)
+    await page.getByRole('button', { name: /modelo-novo/ }).click()
+    await page.getByRole('button', { name: 'Testar com áudio', exact: true }).click()
+    await expect(page.getByText('Último teste concluído')).toBeVisible({ timeout: 30000 })
+    await page.screenshot({ animations: 'disabled', path: '.cache/1.5-remote-models.png', fullPage: true })
     expect(
       calls.some((body) => body.includes('custom_parameter') && body.includes('0.6'))
     ).toBeTruthy()
+    await expect(page.getByText('Suporte NVIDIA opcional')).toHaveCount(0)
+    await expect(page.getByText('Carregar modelo', { exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Salvar conexão', exact: true }).click()
+    await expect(page.getByText('Conexão salva', { exact: true }).first()).toBeVisible()
+    await page.getByRole('button', { name: 'GPU', exact: true }).click()
+    await expect(page.getByText('Suporte NVIDIA opcional')).toBeVisible()
+    expect((await page.evaluate(() => window.api.snapshot())).engines?.activeId).toBe(profile.id)
     delay = true
     const fixture = resolve('backend/transcrevedor/assets/benchmark.wav')
     const files = await page.evaluate((path) => window.api.importPaths([path]), fixture)
@@ -128,7 +142,12 @@ test('motores, JSON, chave, fila e troca exclusiva com servidor local', async ()
     expect(readFileSync(join(directory, 'history/history-v2.json'), 'utf8')).not.toContain(
       'secret-e2e-session'
     )
-    await page.evaluate(() => window.api.switchEngine('whisper'))
+    const switching = page.evaluate(() => window.api.switchEngine('whisper'))
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Trocar motor', exact: true })
+      .click()
+    await switching
     await expect
       .poll(
         async () =>
@@ -147,7 +166,10 @@ test('motores, JSON, chave, fila e troca exclusiva com servidor local', async ()
       diagnostics.join('')
     ).toEqual([])
   } finally {
-    await app.close()
+    await app
+      .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.destroy()))
+      .catch(() => {})
+    await app.close().catch(() => {})
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })

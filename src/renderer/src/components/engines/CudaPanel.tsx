@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import type { CudaStatus } from '../../../../shared/engines'
 
 /** Instalação opcional: CPU e APIs não baixam nem carregam as bibliotecas CUDA. */
-export function CudaPanel({ busy, active }: { busy: boolean; active: boolean }): JSX.Element {
+export function CudaPanel({ busy }: { busy: boolean }): JSX.Element {
   const [status, setStatus] = useState<CudaStatus>()
   const [pending, setPending] = useState(false)
   async function refresh(): Promise<void> {
@@ -17,17 +17,20 @@ export function CudaPanel({ busy, active }: { busy: boolean; active: boolean }):
   }
   useEffect(() => {
     let alive = true
-    if (!busy)
-      void window.api
-        .cudaAction('status')
-        .then((value) => {
-          if (alive) setStatus(value)
-        })
-        .catch(() => {})
+    const timer = setTimeout(() => {
+      if (!busy)
+        void window.api
+          .cudaAction('status')
+          .then((value) => {
+            if (alive) setStatus(value)
+          })
+          .catch(() => {})
+    }, 0)
     return () => {
+      clearTimeout(timer)
       alive = false
     }
-  }, [busy, active])
+  }, [busy])
   async function action(value: 'install' | 'remove'): Promise<void> {
     setPending(true)
     try {
@@ -69,7 +72,7 @@ export function CudaPanel({ busy, active }: { busy: boolean; active: boolean }):
       <div className="flex gap-2">
         <Button
           variant="outline"
-          disabled={busy || pending || !active || !status?.supported || status.installed}
+          disabled={busy || pending || !status?.supported || status.installed}
           onClick={() => action('install')}
         >
           <Download />
@@ -77,7 +80,7 @@ export function CudaPanel({ busy, active }: { busy: boolean; active: boolean }):
         </Button>
         <Button
           variant="ghost"
-          disabled={busy || pending || !active || !status?.bytes}
+          disabled={busy || pending || !status?.bytes}
           onClick={() => action('remove')}
         >
           <Trash2 />
@@ -85,7 +88,6 @@ export function CudaPanel({ busy, active }: { busy: boolean; active: boolean }):
         </Button>
       </div>
       <p className="help">
-        {!active ? 'Ative Whisper local para instalar ou remover. ' : ''}
         {status && !status.supported
           ? 'O instalador opcional de DLLs está disponível no Windows. '
           : ''}

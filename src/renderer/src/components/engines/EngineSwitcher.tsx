@@ -42,6 +42,7 @@ export function EngineSwitcher({
               key={item.id}
               disabled={busy || switching}
               onClick={async () => {
+                setOpen(false)
                 setSwitching(true)
                 try {
                   await window.api.switchEngine(item.id)

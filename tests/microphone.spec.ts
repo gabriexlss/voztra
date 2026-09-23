@@ -52,10 +52,15 @@ test('microfone Live finaliza áudio, preserva navegação e libera captura', as
       baseUrl: `http://127.0.0.1:${port}`,
       liveUrl: `ws://127.0.0.1:${port}`
     }
-    await page.evaluate(async (profile) => {
+    const switching = page.evaluate(async (profile) => {
       const saved = await window.api.saveEngine(profile, '', false)
       await window.api.switchEngine(saved.id)
     }, profile)
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Trocar motor', exact: true })
+      .click()
+    await switching
     await expect
       .poll(async () => page.evaluate(async () => (await window.api.snapshot()).ready), {
         timeout: 30000
@@ -92,7 +97,10 @@ test('microfone Live finaliza áudio, preserva navegação e libera captura', as
     ).toBe(true)
     await expect(page.getByRole('alert')).toHaveCount(0)
   } finally {
-    await app.close()
+    await app
+      .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.destroy()))
+      .catch(() => {})
+    await app.close().catch(() => {})
     lines.close()
     server.kill()
   }

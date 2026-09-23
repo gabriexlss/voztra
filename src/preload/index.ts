@@ -5,6 +5,19 @@ import type { DesktopAPI, BackendEvent } from '../shared/types'
 /** Lista explícita de operações: não expõe IPC genérico ao React. */
 
 const api: DesktopAPI = {
+  applyEngine: (profile, key) => ipcRenderer.invoke('engine-apply', profile, key),
+  discardEngineDraft: (id) => ipcRenderer.invoke('engine-discard', id),
+  answerConfirmation: (id, accepted) => ipcRenderer.invoke('confirmation-answer', id, accepted),
+  onConfirmation: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: import('../shared/confirmation').Confirmation
+    ): void => callback(data)
+    ipcRenderer.on('confirmation:event', listener)
+    return () => {
+      ipcRenderer.removeListener('confirmation:event', listener)
+    }
+  },
   cudaAction: (action) => ipcRenderer.invoke('cuda-action', action),
   saveEngine: (profile, key, remember) => ipcRenderer.invoke('engine-save', profile, key, remember),
   deleteEngine: (id) => ipcRenderer.invoke('engine-delete', id),

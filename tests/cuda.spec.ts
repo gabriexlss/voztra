@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdirSync, linkSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, linkSync, readFileSync, existsSync, writeFileSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 
 /** Usa os wheels já verificados no cache: testa as DLLs reais sem repetir o download. */
@@ -26,14 +26,14 @@ test('instalação NVIDIA opcional reinicia o core e permite remover DLLs reais'
   const executablePath = process.env.TRANSCREVEDOR_EXECUTABLE
   const app = await electron.launch({ args: executablePath ? [] : ['.'], executablePath, env })
   try {
-    await app.evaluate(({ dialog }) => {
-      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
-      dialog.showMessageBoxSync = () => 1
-    })
     const page = await app.firstWindow()
     await expect(page.getByText('Motor conectado', { exact: true })).toBeVisible({ timeout: 60000 })
-    await page.getByRole('button', { name: 'Motores', exact: true }).click()
+    await page.getByRole('button', { name: 'GPU', exact: true }).click()
     await page.getByRole('button', { name: 'Instalar suporte NVIDIA', exact: true }).click()
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Instalar', exact: true })
+      .click()
     await expect(page.getByText('Instalando suporte NVIDIA', { exact: false })).toBeVisible()
     await expect(page.getByText(/Instalado · .* GiB no disco/)).toBeVisible({ timeout: 480000 })
     await expect
@@ -44,6 +44,10 @@ test('instalação NVIDIA opcional reinicia o core e permite remover DLLs reais'
     expect((await page.evaluate(() => window.api.cudaAction('status'))).installed).toBe(true)
     expect(existsSync(join(directory, 'cuda/cublas64_12.dll'))).toBe(true)
     await page.getByRole('button', { name: 'Remover bibliotecas', exact: true }).click()
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Remover', exact: true })
+      .click()
     await expect
       .poll(async () => page.evaluate(async () => (await window.api.snapshot()).ready), {
         timeout: 30000
@@ -53,6 +57,11 @@ test('instalação NVIDIA opcional reinicia o core e permite remover DLLs reais'
     expect(existsSync(join(directory, 'models/keep.txt'))).toBe(true)
     await expect(page.getByRole('alert')).toHaveCount(0)
   } finally {
-    await app.close()
+    await app
+      .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.destroy()))
+      .catch(() => {})
+    await app.close().catch(() => {})
+    // Pasta exclusiva criada por este teste: falhas não deixam gigabytes de DLLs.
+    rmSync(join(directory, 'cuda'), { recursive: true, force: true })
   }
 })

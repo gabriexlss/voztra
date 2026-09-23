@@ -137,6 +137,13 @@ export interface Snapshot {
   error?: string
 }
 export interface DesktopAPI {
+  onConfirmation(callback: (request: import('./confirmation').Confirmation) => void): () => void
+  answerConfirmation(id: string, accepted: boolean): Promise<void>
+  applyEngine(
+    profile: import('./engines').EngineProfile,
+    key?: string
+  ): Promise<import('./engines').EngineProfile | undefined>
+  discardEngineDraft(id: string): Promise<void>
   cudaAction(action: 'status' | 'install' | 'remove'): Promise<import('./engines').CudaStatus>
   saveEngine(
     profile: import('./engines').EngineProfile,

@@ -1,4 +1,4 @@
-import { dialog, type BrowserWindow } from 'electron'
+import type { AskConfirmation } from '../shared/confirmation'
 import { randomUUID } from 'node:crypto'
 import type { Backend } from './backend'
 import type { EngineProfiles } from './engine-profiles'
@@ -12,45 +12,71 @@ interface Context {
   busy: () => boolean
   publish: () => void
   receive: (event: BackendEvent) => void
-  window: () => BrowserWindow
+  ask: AskConfirmation
 }
 /** Um único processo pesado: a transição só inicia o destino após o exit anterior. */
 export function createEngineManager(c: Context): {
-  switchTo: (id: string) => Promise<void>
+  switchTo: (id: string) => Promise<boolean>
   run: (id: string, action: 'api-test' | 'api-models') => Promise<EngineTest | RemoteModel[]>
 } {
-  const free = (): void => {
-    if (c.busy() || c.state.operation)
+  const free = (allowRead = false): void => {
+    if (c.busy() || (c.state.operation && !(allowRead && c.state.operation === 'api-models')))
       throw new Error('Conclua ou cancele a transcrição/operação antes de alterar o motor.')
   }
   return {
     async switchTo(id) {
-      free()
+      free(true)
       if (id !== 'whisper') c.profiles.get(id)
-      if (id === c.profiles.activeId && c.state.ready) return
-      const answer = await dialog.showMessageBox(c.window(), {
-        type: 'question',
-        buttons: ['Cancelar', 'Trocar motor'],
-        defaultId: 1,
-        cancelId: 0,
-        message: 'Desativar o motor atual?',
-        detail:
-          'O processo atual será encerrado. Modelos carregados e conexões serão liberados; suas configurações permanecem salvas.'
+      if (id === c.profiles.activeId && c.state.ready) return true
+      const origin = c.profiles.activeId
+      const answer = await c.ask({
+        title: 'Desativar o motor atual?',
+        action: 'Trocar motor',
+        description: `O processo atual será encerrado e sua memória será liberada. Destino: ${id === 'whisper' ? 'Whisper local' : c.profiles.get(id).name}. Perfis salvos permanecem; alterações temporárias do motor anterior serão descartadas.`
       })
-      if (answer.response !== 1) return
-      free()
+      if (!answer) return false
+      if (origin !== c.profiles.activeId) throw new Error('O motor mudou. Confirme novamente.')
+      free(true)
+      const operationId = randomUUID()
+      c.state.operationId = operationId
       c.state.operation = 'switch-engine'
       c.state.ready = false
       c.publish()
       try {
         await c.backend.shutdown()
+        c.state.devices = []
+        c.state.models = []
         c.state.loaded = undefined
         c.state.modelState = 'unloaded'
         c.profiles.activeId = id
         c.profiles.persist()
-        c.backend.start(c.receive, id === 'whisper' ? 'whisper' : 'api')
+        c.profiles.discard(origin)
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(new Error('O motor não iniciou em 30 segundos.')),
+            30000
+          )
+          c.backend.start(
+            (event) => {
+              c.receive(event)
+              if (event.type === 'ready') {
+                clearTimeout(timer)
+                resolve()
+              }
+              if (event.type === 'fatal') {
+                clearTimeout(timer)
+                reject(new Error(event.message))
+              }
+            },
+            id === 'whisper' ? 'whisper' : 'api'
+          )
+        })
+        return true
       } finally {
-        c.state.operation = undefined
+        if (c.state.operationId === operationId) {
+          c.state.operation = undefined
+          c.state.operationId = undefined
+        }
         c.publish()
       }
     },

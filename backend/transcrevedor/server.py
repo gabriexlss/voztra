@@ -4,95 +4,36 @@ import json
 import sys
 import threading
 import queue
-from .hardware import capabilities, monitor
-from .models import catalog, download_model, delete_model, remote_info
-from .benchmark import run_benchmark
+from .hardware import monitor
 from .protocol import emit
 
 
 def main():
-    api_mode = len(sys.argv) > 2 and sys.argv[2] == "api"
-    if api_mode:
-        from .engines.remote import RemoteEngine
-
-        engine = RemoteEngine()
+    mode = sys.argv[2] if len(sys.argv) > 2 else "whisper"
+    api_mode = mode == "api"
+    # Importa exclusivamente o dispatcher escolhido, sem inicializar os demais motores.
+    if mode == "api":
+        from .workers.api import Worker
+    elif mode == "gpu":
+        from .workers.gpu import Worker
+    elif mode == "whisper":
+        from .workers.whisper import Worker
     else:
-        from .engine import Engine
-
-        engine = Engine(sys.argv[1])
+        raise ValueError("Motor desconhecido.")
+    worker = Worker(sys.argv[1])
     audio_queue = queue.Queue(maxsize=600)
     stop, cancel = threading.Event(), threading.Event()
     lock = threading.Lock()
-    threading.Thread(target=monitor, args=(stop,), daemon=True).start()
+    if mode != "gpu":
+        threading.Thread(target=monitor, args=(stop,), daemon=True).start()
 
     def execute(command):
         result, error = None, None
         operation = command["type"]
         try:
-            if operation.startswith("cuda-"):
-                from . import cuda_packages
-
-                if operation == "cuda-status":
-                    result = cuda_packages.status()
-                elif operation == "cuda-install":
-                    result = cuda_packages.install(
-                        cancel,
-                        lambda percent, message: emit(
-                            "download", percent=percent, message=message
-                        ),
-                    )
-                elif operation == "cuda-remove":
-                    result = cuda_packages.remove()
-                else:
-                    raise ValueError("Operação NVIDIA inválida.")
-            elif operation == "start":
-                if api_mode:
-                    command["audioQueue"] = audio_queue
-                    result = engine.run(command, cancel, emit)
-                else:
-                    result = engine.run(command, cancel)
-            elif operation == "api-models" and api_mode:
-                from .engines.http import list_models
-                from .engines.common import safe_error
-
-                try:
-                    result = list_models(command["profile"])
-                except Exception as exc:
-                    raise ValueError(safe_error(exc, command["profile"])) from None
-            elif operation == "api-test" and api_mode:
-                result = engine.test(command["profile"], cancel)
-            elif operation == "load":
-                result = engine.load(command["options"])
-            elif operation == "catalog":
-                result = catalog(engine.cache)
-            elif operation == "metadata":
-                _, files = remote_info(command["model"])
-                result = sum(f.size or 0 for f in files)
-            elif operation == "download":
-                download_model(
-                    command["model"],
-                    engine.cache,
-                    cancel,
-                    lambda done, total, file: emit(
-                        "download",
-                        model=command["model"],
-                        percent=done / max(total, 1) * 100,
-                        message=f"{done}/{total} arquivos · {file}",
-                    ),
-                )
-                result = catalog(engine.cache)
-            elif operation == "delete":
-                if (
-                    engine.model is not None
-                    and engine.options["model"] == command["model"]
-                ):
-                    raise ValueError("Descarregue o modelo antes de excluí-lo.")
-                delete_model(command["model"], engine.cache)
-                result = catalog(engine.cache)
-            elif operation == "benchmark":
-                result = run_benchmark(engine, cancel)
-            else:
-                raise ValueError("Comando desconhecido.")
+            if api_mode and operation == "start":
+                command["audioQueue"] = audio_queue
+            result = worker.execute(command, cancel)
         except Exception as exc:
             error = str(exc)
         finally:
@@ -113,24 +54,10 @@ def main():
             )
 
     try:
-        if api_mode:
-            emit("ready", models=[])
-        else:
-            emit("ready", **capabilities(), models=catalog(engine.cache))
+        emit("ready", **worker.ready())
         for line in sys.stdin:
             try:
                 command = json.loads(line)
-                if command["type"] == "cuda-status":
-                    # Consulta somente metadados de disco; não disputa o worker de inferência.
-                    from .cuda_packages import status
-
-                    emit(
-                        "response",
-                        requestId=command.get("requestId"),
-                        result=status(),
-                        ok=True,
-                    )
-                    continue
                 if command["type"] == "cancel":
                     cancel.set()
                     continue

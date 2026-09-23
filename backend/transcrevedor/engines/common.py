@@ -33,6 +33,8 @@ def validate(profile):
 
 
 def instructions(profile):
+    if profile.get("instructionMode") == "none":
+        return ""
     return "\n\n".join(
         s.strip()
         for s in (profile.get("basePrompt", ""), profile.get("instructions", ""))

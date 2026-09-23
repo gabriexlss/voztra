@@ -19,6 +19,9 @@ export interface EngineProfile {
   advanced: Record<string, unknown>
   temperature: number | null
   chunkSeconds: number
+  instructionMode?: 'user' | 'system' | 'none'
+  revision?: string
+  temporary?: boolean
   hasKey?: boolean
 }
 export interface RemoteModel {
@@ -59,6 +62,7 @@ export function emptyProfile(): EngineProfile {
     model: '',
     instructions: '',
     basePrompt: BASE_PROMPT,
+    instructionMode: 'user',
     temperature: null,
     advanced: {},
     chunkSeconds: 30

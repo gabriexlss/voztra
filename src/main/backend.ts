@@ -30,7 +30,7 @@ export class Backend {
     for (const request of this.requests.values()) request.reject(new Error(message))
     this.requests.clear()
   }
-  start(onEvent: (event: BackendEvent) => void, mode: 'whisper' | 'api' = 'whisper'): void {
+  start(onEvent: (event: BackendEvent) => void, mode: 'whisper' | 'api' | 'gpu' = 'whisper'): void {
     const generation = ++this.generation
     const root = app.getAppPath()
     const executable =
