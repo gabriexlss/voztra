@@ -2,7 +2,18 @@
 
 Atualizado em 23/09/2026.
 
-## Autorização atual de publicação
+## Publicação concluída
+
+Release pública: https://github.com/gabriexlss/voztra/releases/tag/v1.5.0
+
+- Tag v1.5.0 no commit 7b9064f62abd82006e4bb073211d6b4866a33754.
+- Workflow 35911461477 concluiu com sucesso em Windows e Ubuntu 22.04, incluindo testes dos executáveis empacotados.
+- Oito arquivos: setup, portable, AppImage, deb, blockmap, manifestos Windows/Linux e SHA256SUMS.txt.
+- Checksums da lista comparados aos digests do GitHub; latest.yml aponta para o setup 1.5.0.
+- Publicada como versão estável mais recente em 23/09/2026. Pacotes gerados no CI para poupar espaço local.
+- Próximos bugs devem ser tratados em patch; permanecem as limitações de validação real de Live, OpenAI e inferência NVIDIA.
+
+## Autorização de publicação
 
 Após validar também o Transcribe, o usuário autorizou gerar e publicar a 1.5.0, aceitando a ausência de testes reais de Live, OpenAI e inferência NVIDIA. Builds Windows e Linux serão feitas pelo workflow; publicar somente depois das verificações.
 
